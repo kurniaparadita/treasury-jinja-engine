@@ -1,0 +1,72 @@
+{
+  "ref_counterparty": [
+    {
+      "kode_counterparty": "BI",
+      "nama_institusi": "Bank Indonesia",
+      "kategori_institusi": "SOVEREIGN",
+      "rating_saat_ini": "AAA"
+    },
+    {
+      "kode_counterparty": "BMRI",
+      "nama_institusi": "PT Bank Mandiri (Persero) Tbk",
+      "kategori_institusi": "BANK_KOMERSIAL",
+      "rating_saat_ini": "AAA"
+    },
+    {
+      "kode_counterparty": "BANK_BDPK",
+      "nama_institusi": "Bank X (Dalam Pengawasan Khusus)",
+      "kategori_institusi": "BANK_KOMERSIAL",
+      "rating_saat_ini": "CCC"
+    }
+  ],
+  "ref_rating_pd_mapping": [
+    {
+      "kode_rating": "AAA",
+      "kategori_grade": "INVESTMENT_GRADE",
+      "ttc_pd_rate": 0.0005
+    },
+    {
+      "kode_rating": "CCC",
+      "kategori_grade": "NON_INVESTMENT_GRADE",
+      "ttc_pd_rate": 0.1500
+    }
+  ],
+  "staging_treasury_interbank": [
+    {
+      "id_penempatan": "DEAL-FASBIS-001",
+      "kode_counterparty": "BI",
+      "jenis_instrumen": "FASBIS",
+      "sisa_hari_jatuh_tempo": 14,
+      "nominal_pokok": 100000000000.00,
+      "akrual_imbalan": 150000000.00,
+      "tgl_cut_off": "2026-10-31"
+    },
+    {
+      "id_penempatan": "DEAL-PUAS-002",
+      "kode_counterparty": "BMRI",
+      "jenis_instrumen": "WADIAH_ANTAR_BANK",
+      "sisa_hari_jatuh_tempo": 30,
+      "nominal_pokok": 50000000000.00,
+      "akrual_imbalan": 75000000.00,
+      "tgl_cut_off": "2026-10-31"
+    },
+    {
+      "id_penempatan": "DEAL-NOSTRO-USD-003",
+      "kode_counterparty": "BMRI",
+      "jenis_instrumen": "NOSTRO",
+      "sisa_hari_jatuh_tempo": 0,
+      "nominal_pokok": 15000000000.00,
+      "akrual_imbalan": 0.00,
+      "tgl_cut_off": "2026-10-31"
+    },
+    {
+      "id_penempatan": "DEAL-PUAS-WARN-004",
+      "kode_counterparty": "BANK_BDPK",
+      "jenis_instrumen": "WADIAH_ANTAR_BANK",
+      "sisa_hari_jatuh_tempo": 60,
+      "nominal_pokok": 10000000000.00,
+      "akrual_imbalan": 25000000.00,
+      "tgl_cut_off": "2026-10-31"
+    }
+  ]
+}
