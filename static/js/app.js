@@ -466,15 +466,41 @@ document.getElementById('searchInput').addEventListener('input', function (e) {
     renderTable(currentHeaders, filtered, document.getElementById('cutOffDate').value);
 });
 
-// Dropdown Change Event: Otomatis berubah saat memilih target modul!
-document.getElementById('moduleSelect').addEventListener('change', runEngine);
+// Dropdown Change Handler: Otomatis membaca tanggal cut-off dari tabel database modul terkait & mengeksekusi query
+async function onModuleChange() {
+    const selectedModule = document.getElementById('moduleSelect').value;
+    const cutOffInput = document.getElementById('cutOffDate');
 
-// Run Button Event
+    try {
+        // 1. Ambil tanggal cut-off terakhir dari tabel database fact/master modul terpilih
+        const res = await fetch(`/api/module-cutoff?module=${encodeURIComponent(selectedModule)}`);
+        if (res.ok) {
+            const data = await res.json();
+            if (data.latest_cutoff) {
+                cutOffInput.value = data.latest_cutoff;
+            }
+        }
+    } catch (e) {
+        console.warn('Gagal membaca tanggal cut-off modul dari database:', e);
+    }
+
+    // 2. Jalankan eksekusi kalkulasi sesuai modul dan tanggal cut-off baru
+    await runEngine();
+}
+
+// Event Listeners:
+// a. Saat dropdown modul berganti -> otomatis update tanggal cut-off dari tabel modul & jalankan query
+document.getElementById('moduleSelect').addEventListener('change', onModuleChange);
+
+// b. Saat tanggal cut-off diubah manual oleh user -> jalankan ulang kalkulasi
+document.getElementById('cutOffDate').addEventListener('change', runEngine);
+
+// c. Tombol "Jalankan Kalkulasi"
 document.getElementById('btnRunEngine').addEventListener('click', runEngine);
 
-// Initialization: Poin 5 (Pastikan default ke urutan pertama: counterparty)
-document.addEventListener('DOMContentLoaded', () => {
+// Initialization: Poin 5 (Default ke urutan pertama: counterparty)
+document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('moduleSelect').value = "counterparty";
     checkSystemStatus();
-    runEngine();
+    await onModuleChange();
 });

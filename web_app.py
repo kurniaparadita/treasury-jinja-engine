@@ -44,6 +44,72 @@ def get_bank_name_from_db() -> str:
     return "Bank Aceh Syariah"
 
 # =====================================================================
+# QUERY TANGGAL CUT-OFF DINAMIS PER TARGET MODUL ENGINE
+# =====================================================================
+def get_latest_cutoff_for_module(module_target: str) -> str:
+    """
+    Membaca tanggal cut-off terakhir secara dinamis dari tabel master/fact 
+    masing-masing modul di database SQL Server.
+    Contoh: Modul Interbank membaca MAX(tgl_cut_off) dari fact_ldp_interbank_ecl.
+    """
+    default_date = "2026-10-31"
+    try:
+        engine = get_engine()
+        with engine.connect() as conn:
+            query = None
+            if module_target == "interbank":
+                query = text("""
+                    IF OBJECT_ID('dbo.fact_ldp_interbank_ecl', 'U') IS NOT NULL
+                       AND COL_LENGTH('dbo.fact_ldp_interbank_ecl', 'tgl_cut_off') IS NOT NULL
+                    BEGIN
+                        SELECT CONVERT(VARCHAR(10), MAX(tgl_cut_off), 23) FROM dbo.fact_ldp_interbank_ecl WHERE tgl_cut_off IS NOT NULL;
+                    END
+                    ELSE IF OBJECT_ID('dbo.staging_treasury_interbank', 'U') IS NOT NULL
+                       AND COL_LENGTH('dbo.staging_treasury_interbank', 'tgl_cut_off') IS NOT NULL
+                    BEGIN
+                        SELECT CONVERT(VARCHAR(10), MAX(tgl_cut_off), 23) FROM dbo.staging_treasury_interbank WHERE tgl_cut_off IS NOT NULL;
+                    END
+                """)
+            elif module_target == "sukuk":
+                query = text("""
+                    IF OBJECT_ID('dbo.fact_ldp_sukuk_ecl', 'U') IS NOT NULL
+                       AND COL_LENGTH('dbo.fact_ldp_sukuk_ecl', 'tgl_cut_off') IS NOT NULL
+                    BEGIN
+                        SELECT CONVERT(VARCHAR(10), MAX(tgl_cut_off), 23) FROM dbo.fact_ldp_sukuk_ecl WHERE tgl_cut_off IS NOT NULL;
+                    END
+                    ELSE IF OBJECT_ID('dbo.staging_treasury_sukuk', 'U') IS NOT NULL
+                       AND COL_LENGTH('dbo.staging_treasury_sukuk', 'tgl_cut_off') IS NOT NULL
+                    BEGIN
+                        SELECT CONVERT(VARCHAR(10), MAX(tgl_cut_off), 23) FROM dbo.staging_treasury_sukuk WHERE tgl_cut_off IS NOT NULL;
+                    END
+                """)
+            elif module_target == "konvergensi":
+                query = text("""
+                    IF OBJECT_ID('dbo.fact_ldp_consolidated_gl', 'U') IS NOT NULL
+                       AND COL_LENGTH('dbo.fact_ldp_consolidated_gl', 'tgl_cut_off') IS NOT NULL
+                    BEGIN
+                        SELECT CONVERT(VARCHAR(10), MAX(tgl_cut_off), 23) FROM dbo.fact_ldp_consolidated_gl WHERE tgl_cut_off IS NOT NULL;
+                    END
+                """)
+            elif module_target == "counterparty":
+                query = text("""
+                    IF OBJECT_ID('dbo.ref_counterparty_rating', 'U') IS NOT NULL
+                       AND COL_LENGTH('dbo.ref_counterparty_rating', 'tgl_cut_off') IS NOT NULL
+                    BEGIN
+                        SELECT CONVERT(VARCHAR(10), MAX(tgl_cut_off), 23) FROM dbo.ref_counterparty_rating WHERE tgl_cut_off IS NOT NULL;
+                    END
+                """)
+
+            if query is not None:
+                res = conn.execute(query).scalar()
+                if res and str(res).strip():
+                    return str(res).strip()
+    except Exception as e:
+        app.logger.warning(f"Gagal mengambil cut-off dinamis untuk {module_target}: {e}")
+
+    return default_date
+
+# =====================================================================
 # FETCH DATA RIIL DATABASE PER TARGET MODUL ENGINE (POIN 2 & POIN 6)
 # =====================================================================
 
@@ -459,6 +525,16 @@ def api_status():
         }
     })
 
+@app.route("/api/module-cutoff", methods=["GET"])
+def api_module_cutoff():
+    """Mengembalikan tanggal cut-off terakhir dari tabel master/fact modul yang dipilih."""
+    module_target = request.args.get("module", "interbank")
+    latest_cutoff = get_latest_cutoff_for_module(module_target)
+    return jsonify({
+        "module": module_target,
+        "latest_cutoff": latest_cutoff
+    })
+
 @app.route("/api/run-engine", methods=["POST"])
 def api_run_engine():
     """
@@ -502,6 +578,7 @@ def api_run_engine():
     result_data["db_connected"] = db_connected
     result_data["db_error"] = db_error
     result_data["bank_name"] = get_bank_name_from_db()
+    result_data["latest_cutoff"] = get_latest_cutoff_for_module(module_target)
 
     return jsonify(result_data)
 

@@ -36,6 +36,10 @@ BEGIN
         tgl_cut_off             DATE NOT NULL
     );
 END;
+IF OBJECT_ID('dbo.staging_treasury_interbank', 'U') IS NOT NULL AND COL_LENGTH('dbo.staging_treasury_interbank', 'tgl_cut_off') IS NULL
+BEGIN
+    ALTER TABLE dbo.staging_treasury_interbank ADD tgl_cut_off DATE NULL;
+END;
 
 -- 3. TABEL TARGET HASIL KALKULASI FASE 2 LDP (PIC: Yefta)
 IF OBJECT_ID('dbo.fact_ldp_interbank_ecl', 'U') IS NULL
@@ -51,6 +55,10 @@ BEGIN
         nominal_ckpn        NUMERIC(18, 2) NOT NULL DEFAULT 0.00,    -- Hasil akhir beban cadangan
         created_at          DATETIME2 DEFAULT GETDATE()
     );
+END;
+IF OBJECT_ID('dbo.fact_ldp_interbank_ecl', 'U') IS NOT NULL AND COL_LENGTH('dbo.fact_ldp_interbank_ecl', 'tgl_cut_off') IS NULL
+BEGIN
+    ALTER TABLE dbo.fact_ldp_interbank_ecl ADD tgl_cut_off DATE NULL;
 END;
 
 -- 4. TABEL TARGET HASIL SUKUK (PIC: Fathir)
