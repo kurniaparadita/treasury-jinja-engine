@@ -48,5 +48,4 @@ SELECT
 
 FROM staging_treasury_interbank s
 LEFT JOIN ref_counterparty_rating cr ON s.kode_counterparty = cr.kode_counterparty
-LEFT JOIN ref_rating_pd_mapping rm ON cr.rating_saat_ini = rm.kode_rating
-WHERE s.tgl_cut_off = CAST('{{ tgl_cut_off }}' AS DATE);
+LEFT JOIN ref_rating_pd_mapping rm ON cr.rating_saat_ini = rm.kode_rating;

@@ -3,6 +3,13 @@ let chartInstInstance = null;
 let chartCounterpartyInstance = null;
 let currentRecords = [];
 let currentHeaders = [];
+let currentJournalEntries = [];
+let dealsPageSize = 10;
+let dealsCurrentPage = 1;
+let journalPageSize = 5;
+let journalCurrentPage = 1;
+let doughnutSlices = [];
+let doughnutHoverIdx = -1;
 
 // Helper Format Currency (IDR)
 function formatRupiah(amount) {
@@ -78,12 +85,43 @@ async function runEngine() {
     }
 }
 
+// Render Badge Warna & Rincian di Bawah Chart (Poin 2)
+function renderChart1Legend(labels, values, colors) {
+    const legendBox = document.getElementById('chart1Legend');
+    if (!legendBox) return;
+    const total = values.reduce((a, b) => a + Number(b || 0), 0);
+    legendBox.style.display = 'flex';
+    legendBox.innerHTML = labels.map((lbl, idx) => {
+        const val = Number(values[idx] || 0);
+        const pct = total > 0 ? ((val / total) * 100).toFixed(1) : '0.0';
+        const color = colors[idx % colors.length];
+        let valFormatted;
+        if (val >= 1000000000) {
+            valFormatted = (val / 1000000000).toFixed(2) + ' M';
+        } else if (val >= 1000000) {
+            valFormatted = (val / 1000000).toFixed(1) + ' Jt';
+        } else {
+            valFormatted = val.toLocaleString('id-ID');
+        }
+        return `
+            <div class="legend-chip">
+                <span class="legend-color-dot" style="background-color: ${color};"></span>
+                <span class="legend-chip-title">${lbl}:</span>
+                <span class="legend-chip-val">Rp ${valFormatted} (${pct}%)</span>
+            </div>
+        `;
+    }).join('');
+}
+
 // Update DOM with Engine Output
 function updateDashboard(data) {
     const summary = data.summary;
     const tableData = data.table || {};
     currentRecords = tableData.records || [];
     currentHeaders = tableData.headers || [];
+    currentJournalEntries = data.journal || [];
+    dealsCurrentPage = 1;
+    journalCurrentPage = 1;
 
     // 1. Update Nama Bank jika ada
     if (data.bank_name) {
@@ -120,7 +158,7 @@ function updateDashboard(data) {
     renderCharts(data.charts || {});
 
     // 6. Render Journal
-    renderJournal(data.journal || []);
+    renderJournal(currentJournalEntries);
 }
 
 // Native Canvas Chart Renderers for Offline Mode (Tanpa Akses Internet/CDN)
@@ -134,32 +172,110 @@ function drawOfflineDoughnut(canvas, labels, values) {
     if (total === 0) return;
 
     const centerX = width / 2;
-    const centerY = (height / 2) - 15;
-    const radius = Math.min(centerX, centerY) - 20;
-    const innerRadius = radius * 0.65;
+    const centerY = height / 2;
+    const baseRadius = Math.min(centerX, centerY) - 20;
+    const innerRadius = baseRadius * 0.65;
     const colors = ['#059669', '#0284c7', '#d97706', '#7c3aed', '#e11d48', '#0d9488'];
 
+    doughnutSlices = [];
     let currentAngle = -Math.PI / 2;
+
     values.forEach((val, idx) => {
         const sliceAngle = (Number(val || 0) / total) * 2 * Math.PI;
+        const endAngle = currentAngle + sliceAngle;
+        const isHovered = (idx === doughnutHoverIdx);
+        const radius = isHovered ? baseRadius + 6 : baseRadius;
+
         ctx.beginPath();
-        ctx.arc(centerX, centerY, radius, currentAngle, currentAngle + sliceAngle);
-        ctx.arc(centerX, centerY, innerRadius, currentAngle + sliceAngle, currentAngle, true);
+        ctx.arc(centerX, centerY, radius, currentAngle, endAngle);
+        ctx.arc(centerX, centerY, innerRadius, endAngle, currentAngle, true);
         ctx.closePath();
         ctx.fillStyle = colors[idx % colors.length];
         ctx.fill();
         ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 2;
+        ctx.lineWidth = isHovered ? 3 : 2;
         ctx.stroke();
-        currentAngle += sliceAngle;
+
+        doughnutSlices.push({
+            startAngle: currentAngle,
+            endAngle: endAngle,
+            label: labels[idx],
+            val: Number(val || 0),
+            pct: ((Number(val || 0) / total) * 100).toFixed(1),
+            color: colors[idx % colors.length]
+        });
+
+        currentAngle = endAngle;
     });
 
-    // Legend
-    ctx.font = '600 11px Inter, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillStyle = '#475569';
-    const legendText = labels.slice(0, 5).map((l, i) => `${l}: ${values[i]}`).join('  |  ');
-    ctx.fillText(legendText, centerX, height - 12);
+    // Render Badge Warna & Rincian di Bawah Chart (Poin 2)
+    renderChart1Legend(labels, values, colors);
+
+    // Attach Interactive Hover Tooltip Listener (Poin 5)
+    if (!canvas._hasHoverListener) {
+        canvas._hasHoverListener = true;
+        const tooltip = document.getElementById('chartTooltip');
+
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+
+            const cx = canvas.width / 2;
+            const cy = canvas.height / 2;
+            const dx = mouseX - cx;
+            const dy = mouseY - cy;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+
+            const rInner = (Math.min(cx, cy) - 20) * 0.65;
+            const rOuter = Math.min(cx, cy) - 10;
+
+            if (dist >= rInner && dist <= rOuter) {
+                let angle = Math.atan2(dy, dx);
+                if (angle < -Math.PI / 2) angle += 2 * Math.PI;
+
+                const foundIdx = doughnutSlices.findIndex(s => angle >= s.startAngle && angle < s.endAngle);
+                if (foundIdx !== -1) {
+                    if (doughnutHoverIdx !== foundIdx) {
+                        doughnutHoverIdx = foundIdx;
+                        drawOfflineDoughnut(canvas, labels, values);
+                    }
+                    const s = doughnutSlices[foundIdx];
+                    if (tooltip) {
+                        tooltip.style.display = 'block';
+                        tooltip.style.left = (mouseX + 15) + 'px';
+                        tooltip.style.top = (mouseY - 25) + 'px';
+                        tooltip.innerHTML = `
+                            <div class="tooltip-header">
+                                <span class="tooltip-dot" style="background-color: ${s.color};"></span>
+                                <span>${s.label}</span>
+                            </div>
+                            <div class="tooltip-body">
+                                Nilai EAD: <strong>Rp ${s.val.toLocaleString('id-ID')}</strong><br>
+                                Kontribusi: <strong>${s.pct}%</strong>
+                            </div>
+                        `;
+                    }
+                    return;
+                }
+            }
+
+            // Di luar irisan donat
+            if (doughnutHoverIdx !== -1) {
+                doughnutHoverIdx = -1;
+                drawOfflineDoughnut(canvas, labels, values);
+                if (tooltip) tooltip.style.display = 'none';
+            }
+        });
+
+        canvas.addEventListener('mouseleave', () => {
+            if (doughnutHoverIdx !== -1) {
+                doughnutHoverIdx = -1;
+                drawOfflineDoughnut(canvas, labels, values);
+            }
+            if (tooltip) tooltip.style.display = 'none';
+        });
+    }
 }
 
 function drawOfflineBar(canvas, labels, values) {
@@ -169,35 +285,60 @@ function drawOfflineBar(canvas, labels, values) {
     ctx.clearRect(0, 0, width, height);
 
     const numValues = values.map(v => Number(v || 0));
-    const maxVal = Math.max(...numValues, 1);
-    const padding = { top: 25, bottom: 35, left: 35, right: 20 };
+    const maxVal = Math.max(...numValues, 0);
+    const isRate = maxVal <= 1.0 && maxVal > 0;
+    const padding = { top: 30, bottom: 35, left: 25, right: 20 };
     const chartW = width - padding.left - padding.right;
     const chartH = height - padding.top - padding.bottom;
     const barWidth = Math.min(45, (chartW / Math.max(numValues.length, 1)) * 0.65);
     const gap = chartW / Math.max(numValues.length, 1);
 
+    // Garis dasar (baseline)
+    ctx.strokeStyle = '#e2e8f0';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(padding.left, padding.top + chartH);
+    ctx.lineTo(padding.left + chartW, padding.top + chartH);
+    ctx.stroke();
+
     numValues.forEach((val, idx) => {
-        const barH = (val / maxVal) * chartH;
+        const barH = maxVal > 0 ? (val / maxVal) * chartH : 0;
         const x = padding.left + (idx * gap) + (gap - barWidth) / 2;
         const y = padding.top + chartH - barH;
 
-        ctx.fillStyle = 'rgba(217, 119, 6, 0.85)';
-        if (ctx.roundRect) {
-            ctx.beginPath();
-            ctx.roundRect(x, y, barWidth, barH, [4, 4, 0, 0]);
-            ctx.fill();
-        } else {
-            ctx.fillRect(x, y, barWidth, barH);
+        if (barH > 0) {
+            ctx.fillStyle = 'rgba(217, 119, 6, 0.85)';
+            if (ctx.roundRect) {
+                ctx.beginPath();
+                ctx.roundRect(x, y, barWidth, barH, [4, 4, 0, 0]);
+                ctx.fill();
+            } else {
+                ctx.fillRect(x, y, barWidth, barH);
+            }
         }
 
-        ctx.fillStyle = '#0f172a';
+        // Teks nilai di atas batang
+        ctx.fillStyle = val > 0 ? '#0f172a' : '#94a3b8';
         ctx.font = '600 10px "JetBrains Mono", monospace';
         ctx.textAlign = 'center';
-        const displayVal = val >= 1000 ? (val / 1000).toFixed(0) + 'k' : val.toFixed(1) + '%';
+        
+        let displayVal;
+        if (isRate) {
+            displayVal = (val * 100).toFixed(2) + '%';
+        } else if (val >= 1000000000) {
+            displayVal = (val / 1000000000).toFixed(2) + ' M';
+        } else if (val >= 1000000) {
+            displayVal = (val / 1000000).toFixed(1) + ' Jt';
+        } else if (val > 0) {
+            displayVal = 'Rp ' + val.toLocaleString('id-ID');
+        } else {
+            displayVal = 'Rp 0';
+        }
         ctx.fillText(displayVal, x + barWidth / 2, y - 6);
 
-        ctx.fillStyle = '#64748b';
-        ctx.font = '600 10px Inter, sans-serif';
+        // Label pihak lawan di bawah
+        ctx.fillStyle = '#475569';
+        ctx.font = '700 11px Inter, sans-serif';
         const lbl = String(labels[idx] || '').substring(0, 10);
         ctx.fillText(lbl, x + barWidth / 2, height - 12);
     });
@@ -212,6 +353,7 @@ function renderCharts(chartsData) {
     const c1Tag = document.getElementById('chart1Tag');
     const c1Canvas = document.getElementById('chartInstruments');
     const c1Empty = document.getElementById('chart1Empty');
+    const c1Legend = document.getElementById('chart1Legend');
     c1Title.textContent = chartsData.chart1_title || "Distribusi Portofolio";
     c1Tag.textContent = chartsData.chart1_tag || "Data Riil";
 
@@ -223,6 +365,7 @@ function renderCharts(chartsData) {
     if (!hasData1) {
         c1Canvas.style.display = 'none';
         if (c1Empty) c1Empty.style.display = 'flex';
+        if (c1Legend) c1Legend.style.display = 'none';
         if (chartInstInstance && typeof chartInstInstance.destroy === 'function') {
             chartInstInstance.destroy();
             chartInstInstance = null;
@@ -230,6 +373,9 @@ function renderCharts(chartsData) {
     } else {
         c1Canvas.style.display = 'block';
         if (c1Empty) c1Empty.style.display = 'none';
+
+        const chartColors = ['#059669', '#0284c7', '#d97706', '#7c3aed', '#e11d48', '#0d9488'];
+        renderChart1Legend(labels1, values1, chartColors);
 
         if (typeof Chart !== 'undefined') {
             const ctx1 = c1Canvas.getContext('2d');
@@ -241,7 +387,7 @@ function renderCharts(chartsData) {
                     labels: labels1,
                     datasets: [{
                         data: values1,
-                        backgroundColor: ['#059669', '#0284c7', '#d97706', '#7c3aed', '#e11d48'],
+                        backgroundColor: chartColors,
                         borderColor: '#ffffff',
                         borderWidth: 2
                     }]
@@ -250,15 +396,23 @@ function renderCharts(chartsData) {
                     responsive: true,
                     maintainAspectRatio: false,
                     plugins: {
-                        legend: {
-                            position: 'bottom',
-                            labels: { color: '#475569', font: { family: 'Inter', size: 11, weight: '600' } }
-                        },
+                        legend: { display: false },
                         tooltip: {
+                            backgroundColor: 'rgba(15, 23, 42, 0.95)',
+                            titleColor: '#ffffff',
+                            titleFont: { family: 'Inter', size: 12, weight: 'bold' },
+                            bodyColor: '#38bdf8',
+                            bodyFont: { family: 'JetBrains Mono', size: 12 },
+                            padding: 10,
+                            cornerRadius: 8,
+                            displayColors: true,
                             callbacks: {
                                 label: function (ctx) {
-                                    const val = ctx.parsed;
-                                    return ' ' + ctx.label + ': ' + (val > 1000 ? formatRupiah(val) : val);
+                                    const val = Number(ctx.parsed || 0);
+                                    const total = ctx.dataset.data.reduce((a, b) => a + Number(b || 0), 0);
+                                    const pct = total > 0 ? ((val / total) * 100).toFixed(1) : '0.0';
+                                    const valStr = val > 1000 ? formatRupiah(val) : val;
+                                    return ` EAD: ${valStr} (${pct}%)`;
                                 }
                             }
                         }
@@ -356,11 +510,56 @@ function renderCharts(chartsData) {
     }
 }
 
-// Render Table Headers and Body
+// Render Pagination Bar Component
+function renderPaginationBar(container, totalItems, pageSize, currentPage, totalPages, startIdx, endIdx, onPageChange) {
+    if (totalItems <= 0) {
+        container.innerHTML = '';
+        return;
+    }
+
+    const showingText = `Menampilkan ${startIdx + 1}-${endIdx} dari ${totalItems} baris`;
+
+    let buttonsHtml = '';
+    // Tombol Prev
+    buttonsHtml += `<button type="button" class="btn-page" ${currentPage === 1 ? 'disabled' : ''} data-page="${currentPage - 1}">&laquo; Prev</button>`;
+
+    // Nomor Halaman
+    for (let p = 1; p <= totalPages; p++) {
+        if (totalPages > 7) {
+            if (p !== 1 && p !== totalPages && Math.abs(p - currentPage) > 1) {
+                if (p === 2 || p === totalPages - 1) {
+                    buttonsHtml += `<span style="padding: 0 4px; color: #94a3b8; align-self: center;">...</span>`;
+                }
+                continue;
+            }
+        }
+        buttonsHtml += `<button type="button" class="btn-page ${p === currentPage ? 'active' : ''}" data-page="${p}">${p}</button>`;
+    }
+
+    // Tombol Next
+    buttonsHtml += `<button type="button" class="btn-page" ${currentPage === totalPages ? 'disabled' : ''} data-page="${currentPage + 1}">Next &raquo;</button>`;
+
+    container.innerHTML = `
+        <span class="pagination-info">${showingText}</span>
+        <div class="pagination-controls">${buttonsHtml}</div>
+    `;
+
+    container.querySelectorAll('button[data-page]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const targetPage = parseInt(e.currentTarget.getAttribute('data-page'));
+            if (targetPage && targetPage >= 1 && targetPage <= totalPages && targetPage !== currentPage) {
+                onPageChange(targetPage);
+            }
+        });
+    });
+}
+
+// Render Table Headers and Body with Pagination (DDR 5, 10, 25, 50, 100)
 function renderTable(headers, records, cutOff) {
     const thead = document.getElementById('dealsTableHead');
     const tbody = document.getElementById('dealsTableBody');
     const counter = document.getElementById('recordCounter');
+    const paginationEl = document.getElementById('dealsPagination');
 
     // 1. Render Headers
     thead.innerHTML = '';
@@ -372,7 +571,7 @@ function renderTable(headers, records, cutOff) {
     });
     thead.appendChild(trHead);
 
-    // 2. Render Records
+    // 2. Render Records Count
     tbody.innerHTML = '';
     counter.textContent = `${records.length} Baris Data`;
 
@@ -386,10 +585,21 @@ function renderTable(headers, records, cutOff) {
                 </td>
             </tr>
         `;
+        if (paginationEl) paginationEl.innerHTML = '';
         return;
     }
 
-    records.forEach(row => {
+    // 3. Hitung pagination
+    const totalRecords = records.length;
+    const totalPages = Math.ceil(totalRecords / dealsPageSize) || 1;
+    if (dealsCurrentPage > totalPages) dealsCurrentPage = totalPages;
+    if (dealsCurrentPage < 1) dealsCurrentPage = 1;
+
+    const startIdx = (dealsCurrentPage - 1) * dealsPageSize;
+    const endIdx = Math.min(startIdx + dealsPageSize, totalRecords);
+    const pageRecords = records.slice(startIdx, endIdx);
+
+    pageRecords.forEach(row => {
         const tr = document.createElement('tr');
         const stageNum = parseInt(row.col7) || 1;
         const stageBadgeClass = stageNum === 1 ? 'badge-stage-1' : 'badge-stage-2';
@@ -413,19 +623,38 @@ function renderTable(headers, records, cutOff) {
         `;
         tbody.appendChild(tr);
     });
+
+    // 4. Render Pagination Controls
+    if (paginationEl) {
+        renderPaginationBar(paginationEl, totalRecords, dealsPageSize, dealsCurrentPage, totalPages, startIdx, endIdx, (newPage) => {
+            dealsCurrentPage = newPage;
+            renderTable(headers, records, cutOff);
+        });
+    }
 }
 
-// Render Accounting Journal
+// Render Accounting Journal with Pagination (DDR 5, 10, 25, 50, 100)
 function renderJournal(entries) {
     const tbody = document.getElementById('journalTableBody');
+    const paginationEl = document.getElementById('journalPagination');
     tbody.innerHTML = '';
 
-    if (entries.length === 0) {
+    if (!entries || entries.length === 0) {
         tbody.innerHTML = `<tr><td colspan="5" class="text-center py-3 text-muted">Belum ada ayat jurnal untuk modul ini.</td></tr>`;
+        if (paginationEl) paginationEl.innerHTML = '';
         return;
     }
 
-    entries.forEach(entry => {
+    const totalEntries = entries.length;
+    const totalPages = Math.ceil(totalEntries / journalPageSize) || 1;
+    if (journalCurrentPage > totalPages) journalCurrentPage = totalPages;
+    if (journalCurrentPage < 1) journalCurrentPage = 1;
+
+    const startIdx = (journalCurrentPage - 1) * journalPageSize;
+    const endIdx = Math.min(startIdx + journalPageSize, totalEntries);
+    const pageEntries = entries.slice(startIdx, endIdx);
+
+    pageEntries.forEach(entry => {
         const tr = document.createElement('tr');
         const isDebit = entry.posisi === 'DEBIT';
         const isStatus = entry.posisi === 'STATUS';
@@ -453,11 +682,19 @@ function renderJournal(entries) {
         `;
         tbody.appendChild(tr);
     });
+
+    if (paginationEl) {
+        renderPaginationBar(paginationEl, totalEntries, journalPageSize, journalCurrentPage, totalPages, startIdx, endIdx, (newPage) => {
+            journalCurrentPage = newPage;
+            renderJournal(entries);
+        });
+    }
 }
 
 // Search Filter Handler
 document.getElementById('searchInput').addEventListener('input', function (e) {
     const q = e.target.value.toLowerCase();
+    dealsCurrentPage = 1;
     const filtered = currentRecords.filter(r => 
         (r.col1 && String(r.col1).toLowerCase().includes(q)) ||
         (r.col2 && String(r.col2).toLowerCase().includes(q)) ||
@@ -465,6 +702,31 @@ document.getElementById('searchInput').addEventListener('input', function (e) {
     );
     renderTable(currentHeaders, filtered, document.getElementById('cutOffDate').value);
 });
+
+// DDR Page Size Selector Handlers (Poin 4: DDR 5, 10, 25, 50, 100)
+const pageSizeDealsEl = document.getElementById('pageSizeDeals');
+if (pageSizeDealsEl) {
+    pageSizeDealsEl.addEventListener('change', (e) => {
+        dealsPageSize = parseInt(e.target.value) || 10;
+        dealsCurrentPage = 1;
+        const q = (document.getElementById('searchInput')?.value || '').toLowerCase();
+        const recordsToUse = q ? currentRecords.filter(r => 
+            (r.col1 && String(r.col1).toLowerCase().includes(q)) ||
+            (r.col2 && String(r.col2).toLowerCase().includes(q)) ||
+            (r.col3 && String(r.col3).toLowerCase().includes(q))
+        ) : currentRecords;
+        renderTable(currentHeaders, recordsToUse, document.getElementById('cutOffDate').value);
+    });
+}
+
+const pageSizeJournalEl = document.getElementById('pageSizeJournal');
+if (pageSizeJournalEl) {
+    pageSizeJournalEl.addEventListener('change', (e) => {
+        journalPageSize = parseInt(e.target.value) || 5;
+        journalCurrentPage = 1;
+        renderJournal(currentJournalEntries);
+    });
+}
 
 // Dropdown Change Handler: Otomatis membaca tanggal cut-off dari tabel database modul terkait & mengeksekusi query
 async function onModuleChange() {
@@ -498,9 +760,9 @@ document.getElementById('cutOffDate').addEventListener('change', runEngine);
 // c. Tombol "Jalankan Kalkulasi"
 document.getElementById('btnRunEngine').addEventListener('click', runEngine);
 
-// Initialization: Poin 5 (Default ke urutan pertama: counterparty)
+// Initialization: Default langsung ke modul 3 (Penempatan Antar Bank & Nostro Devisa)
 document.addEventListener('DOMContentLoaded', async () => {
-    document.getElementById('moduleSelect').value = "counterparty";
+    document.getElementById('moduleSelect').value = "interbank";
     checkSystemStatus();
     await onModuleChange();
 });

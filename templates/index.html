@@ -41,9 +41,9 @@
                 <div class="control-group">
                     <label for="moduleSelect">Target Modul Engine</label>
                     <select id="moduleSelect">
-                        <option value="counterparty" selected>1. Master Counterparty</option>
+                        <option value="counterparty">1. Master Counterparty</option>
                         <option value="sukuk">2. Sukuk & Integrasi Pemeringkat Eksternal</option>
-                        <option value="interbank">3. Modul Penempatan Antar Bank & Nostro Devisa</option>
+                        <option value="interbank" selected>3. Modul Penempatan Antar Bank & Nostro Devisa</option>
                         <option value="konvergensi">4. Konvergensi Grand Master Engine (Treasury + Pembiayaan)</option>
                     </select>
                 </div>
@@ -123,7 +123,9 @@
                             <span class="empty-title">Belum Ada Data Transaksi</span>
                             <span class="empty-desc">Grafik akan terisi otomatis saat tabel database terisi</span>
                         </div>
+                        <div id="chartTooltip" class="chart-tooltip" style="display: none;"></div>
                     </div>
+                    <div id="chart1Legend" class="chart-legend-box" style="display: none;"></div>
                 </div>
 
                 <div class="chart-card card">
@@ -150,6 +152,16 @@
                         <p class="section-desc" id="tableSubtitle">Membaca langsung dari tabel database SQL Server (iPSAK71)</p>
                     </div>
                     <div class="table-actions">
+                        <div class="page-size-box">
+                            <label for="pageSizeDeals">Tampilkan:</label>
+                            <select id="pageSizeDeals" class="select-ddr">
+                                <option value="5">5</option>
+                                <option value="10" selected>10</option>
+                                <option value="25">25</option>
+                                <option value="50">50</option>
+                                <option value="100">100</option>
+                            </select>
+                        </div>
                         <input type="text" id="searchInput" placeholder="Cari data..." class="search-input">
                         <span class="record-counter" id="recordCounter">0 Baris</span>
                     </div>
@@ -167,6 +179,7 @@
                         </tbody>
                     </table>
                 </div>
+                <div id="dealsPagination" class="pagination-bar"></div>
             </section>
 
             <!-- Journal Accounting Integration Section -->
@@ -176,7 +189,19 @@
                         <h3 id="journalTitle">Jurnal Akuntansi End of Month (GL)</h3>
                         <p class="section-desc">Hasil rekapitulasi nilai nominal cadangan kerugian penurunan nilai untuk pembukuan</p>
                     </div>
-                    <span class="journal-badge" id="journalBadge">JURNAL</span>
+                    <div class="journal-actions">
+                        <div class="page-size-box">
+                            <label for="pageSizeJournal">Tampilkan:</label>
+                            <select id="pageSizeJournal" class="select-ddr">
+                                <option value="5" selected>5</option>
+                                <option value="10">10</option>
+                                <option value="25">25</option>
+                                <option value="50">50</option>
+                                <option value="100">100</option>
+                            </select>
+                        </div>
+                        <span class="journal-badge" id="journalBadge">JURNAL</span>
+                    </div>
                 </div>
                 <div class="table-wrapper">
                     <table class="journal-table">
@@ -194,6 +219,7 @@
                         </tbody>
                     </table>
                 </div>
+                <div id="journalPagination" class="pagination-bar"></div>
             </section>
         </main>
 
@@ -203,6 +229,6 @@
         </footer>
     </div>
 
-    <script src="/static/js/app.js?v=3"></script>
+    <script src="/static/js/app.js?v=6"></script>
 </body>
 </html>

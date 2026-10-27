@@ -46,64 +46,57 @@ def get_bank_name_from_db() -> str:
 # =====================================================================
 # QUERY TANGGAL CUT-OFF DINAMIS PER TARGET MODUL ENGINE
 # =====================================================================
+def get_column_max_date(conn, table_name: str, column_name: str = "tgl_cut_off"):
+    """Cek apakah tabel dan kolom ada di database via INFORMATION_SCHEMA sebelum dieksekusi agar bebas dari compile error SQL Server."""
+    try:
+        chk_query = text("""
+            SELECT 1 
+            FROM INFORMATION_SCHEMA.COLUMNS 
+            WHERE TABLE_NAME = :tbl AND COLUMN_NAME = :col
+        """)
+        has_col = conn.execute(chk_query, {"tbl": table_name, "col": column_name}).scalar()
+        if has_col:
+            fetch_query = text(f"SELECT CONVERT(VARCHAR(10), MAX({column_name}), 23) FROM dbo.{table_name} WHERE {column_name} IS NOT NULL")
+            res = conn.execute(fetch_query).scalar()
+            if res and str(res).strip():
+                return str(res).strip()
+    except Exception:
+        pass
+    return None
+
 def get_latest_cutoff_for_module(module_target: str) -> str:
     """
     Membaca tanggal cut-off terakhir secara dinamis dari tabel master/fact 
-    masing-masing modul di database SQL Server.
-    Contoh: Modul Interbank membaca MAX(tgl_cut_off) dari fact_ldp_interbank_ecl.
+    masing-masing modul di database SQL Server secara aman (zero SQL compile error).
     """
     default_date = "2026-10-31"
     try:
         engine = get_engine()
         with engine.connect() as conn:
-            query = None
             if module_target == "interbank":
-                query = text("""
-                    IF OBJECT_ID('dbo.fact_ldp_interbank_ecl', 'U') IS NOT NULL
-                       AND COL_LENGTH('dbo.fact_ldp_interbank_ecl', 'tgl_cut_off') IS NOT NULL
-                    BEGIN
-                        SELECT CONVERT(VARCHAR(10), MAX(tgl_cut_off), 23) FROM dbo.fact_ldp_interbank_ecl WHERE tgl_cut_off IS NOT NULL;
-                    END
-                    ELSE IF OBJECT_ID('dbo.staging_treasury_interbank', 'U') IS NOT NULL
-                       AND COL_LENGTH('dbo.staging_treasury_interbank', 'tgl_cut_off') IS NOT NULL
-                    BEGIN
-                        SELECT CONVERT(VARCHAR(10), MAX(tgl_cut_off), 23) FROM dbo.staging_treasury_interbank WHERE tgl_cut_off IS NOT NULL;
-                    END
-                """)
-            elif module_target == "sukuk":
-                query = text("""
-                    IF OBJECT_ID('dbo.fact_ldp_sukuk_ecl', 'U') IS NOT NULL
-                       AND COL_LENGTH('dbo.fact_ldp_sukuk_ecl', 'tgl_cut_off') IS NOT NULL
-                    BEGIN
-                        SELECT CONVERT(VARCHAR(10), MAX(tgl_cut_off), 23) FROM dbo.fact_ldp_sukuk_ecl WHERE tgl_cut_off IS NOT NULL;
-                    END
-                    ELSE IF OBJECT_ID('dbo.staging_treasury_sukuk', 'U') IS NOT NULL
-                       AND COL_LENGTH('dbo.staging_treasury_sukuk', 'tgl_cut_off') IS NOT NULL
-                    BEGIN
-                        SELECT CONVERT(VARCHAR(10), MAX(tgl_cut_off), 23) FROM dbo.staging_treasury_sukuk WHERE tgl_cut_off IS NOT NULL;
-                    END
-                """)
-            elif module_target == "konvergensi":
-                query = text("""
-                    IF OBJECT_ID('dbo.fact_ldp_consolidated_gl', 'U') IS NOT NULL
-                       AND COL_LENGTH('dbo.fact_ldp_consolidated_gl', 'tgl_cut_off') IS NOT NULL
-                    BEGIN
-                        SELECT CONVERT(VARCHAR(10), MAX(tgl_cut_off), 23) FROM dbo.fact_ldp_consolidated_gl WHERE tgl_cut_off IS NOT NULL;
-                    END
-                """)
-            elif module_target == "counterparty":
-                query = text("""
-                    IF OBJECT_ID('dbo.ref_counterparty_rating', 'U') IS NOT NULL
-                       AND COL_LENGTH('dbo.ref_counterparty_rating', 'tgl_cut_off') IS NOT NULL
-                    BEGIN
-                        SELECT CONVERT(VARCHAR(10), MAX(tgl_cut_off), 23) FROM dbo.ref_counterparty_rating WHERE tgl_cut_off IS NOT NULL;
-                    END
-                """)
+                # Prioritas 1: fact_ldp_interbank_ecl, Prioritas 2: staging_treasury_interbank
+                d = get_column_max_date(conn, "fact_ldp_interbank_ecl", "tgl_cut_off")
+                if not d:
+                    d = get_column_max_date(conn, "staging_treasury_interbank", "tgl_cut_off")
+                if d:
+                    return d
 
-            if query is not None:
-                res = conn.execute(query).scalar()
-                if res and str(res).strip():
-                    return str(res).strip()
+            elif module_target == "sukuk":
+                d = get_column_max_date(conn, "fact_ldp_sukuk_ecl", "tgl_cut_off")
+                if not d:
+                    d = get_column_max_date(conn, "staging_treasury_sukuk", "tgl_cut_off")
+                if d:
+                    return d
+
+            elif module_target == "konvergensi":
+                d = get_column_max_date(conn, "fact_ldp_consolidated_gl", "tgl_cut_off")
+                if d:
+                    return d
+
+            elif module_target == "counterparty":
+                # Tabel referensi (ref_*) sifatnya statis/master lookup dan tidak memerlukan kolom tanggal cut-off
+                return default_date
+
     except Exception as e:
         app.logger.warning(f"Gagal mengambil cut-off dinamis untuk {module_target}: {e}")
 
@@ -333,7 +326,16 @@ def fetch_interbank_real(cut_off: str) -> dict:
                 s2_count = int((df["stage_psak"] == 2).sum())
                 avg_pd = float(df["short_term_pd"].mean())
 
-                inst_dist = df.groupby("jenis_instrumen")["ead_treasury"].sum().to_dict()
+                # Bersihkan label jenis instrumen dan urutkan dari kontribusi terbesar
+                raw_inst = df.groupby("jenis_instrumen")["ead_treasury"].sum().to_dict()
+                clean_inst_dist = {}
+                for k, v in raw_inst.items():
+                    lbl = str(k).strip() if pd.notna(k) else "LAINNYA"
+                    if not lbl or lbl == "None" or (lbl.isdigit() and len(lbl) > 4):
+                        lbl = "FASBIS"
+                    clean_inst_dist[lbl] = clean_inst_dist.get(lbl, 0.0) + float(v)
+                # Urutkan dari nilai EAD terbesar ke terkecil
+                inst_dist = dict(sorted(clean_inst_dist.items(), key=lambda x: x[1], reverse=True))
                 ckpn_dist = df.groupby("kode_counterparty")["nominal_ckpn"].sum().to_dict()
 
                 for _, r in df.iterrows():
@@ -359,10 +361,10 @@ def fetch_interbank_real(cut_off: str) -> dict:
         "summary": {
             "kpi1_title": "Total EAD (Exposure)",
             "kpi1_val": total_ead,
-            "kpi1_sub": f"Tabel fact_ldp_interbank_ecl ({cut_off})",
+            "kpi1_sub": "",
             "kpi2_title": "Total Beban CKPN (ECL)",
             "kpi2_val": total_ckpn,
-            "kpi2_sub": f"Coverage: {(total_ckpn / total_ead * 100):.4f}%" if total_ead > 0 else "Coverage: 0.000%",
+            "kpi2_sub": f"Coverage: {(total_ckpn / total_ead * 100):.4f}%" if total_ead > 0 else "Coverage: 0.0000%",
             "kpi3_title": "Distribusi Staging PSAK",
             "kpi3_s1": s1_count,
             "kpi3_s2": s2_count,
@@ -370,11 +372,11 @@ def fetch_interbank_real(cut_off: str) -> dict:
             "kpi3_desc2": "Stage 2 (Warning)",
             "kpi4_title": "Rata-rata Short-Term PD",
             "kpi4_val": f"{avg_pd * 100:.6f}%",
-            "kpi4_sub": "Dikonversi eksponensial (BR-IB-02)"
+            "kpi4_sub": ""
         },
         "table": {
-            "title": "Rincian Transaksi Portofolio Pasar Uang & Nostro (Riil Database)",
-            "subtitle": "Kalkulasi formula Short-Term PD eksponensial dan LGD 45% (BR-IB-01 s/d BR-IB-04)",
+            "title": "Rincian Transaksi Portofolio Pasar Uang & Nostro",
+            "subtitle": "Kalkulasi formula Short-Term PD eksponensial dan LGD 45%",
             "headers": ["ID Deal", "Pihak Lawan", "Instrumen", "Tenor", "EAD (Pokok+Akrual)", "Rating", "Stage", "Annual PD", "Short-Term PD", "LGD", "Nominal CKPN"],
             "records": records
         },
