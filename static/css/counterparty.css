@@ -1,0 +1,481 @@
+/* ====================================================================
+   PSAK 413 OFFLINE STANDALONE STYLESHEET - MODUL MASTER COUNTERPARTY
+   PIC: Ahmad
+   100% Mandiri, Bebas dari Internet / CDN Eksternal, Tidak Butuh style.css
+   ==================================================================== */
+
+:root {
+    --bg-primary: #f8fafc;
+    --bg-secondary: #ffffff;
+    --card-bg: #ffffff;
+    --card-hover: #fcfdfe;
+    --border-color: #e2e8f0;
+    --border-highlight: rgba(5, 150, 105, 0.3);
+    
+    --text-primary: #0f172a;
+    --text-secondary: #475569;
+    --text-muted: #64748b;
+
+    --emerald: #059669;
+    --emerald-light: #10b981;
+    --emerald-dark: #047857;
+    --emerald-bg: #ecfdf5;
+    --emerald-border: #a7f3d0;
+    
+    --gold: #d97706;
+    --gold-dark: #b45309;
+    --gold-bg: #fffbeb;
+    --gold-border: #fde68a;
+
+    --cyan: #0284c7;
+    --cyan-bg: #f0f9ff;
+    --cyan-border: #bae6fd;
+
+    --rose: #e11d48;
+    --rose-bg: #fff1f2;
+    --rose-border: #fecdd3;
+
+    --font-heading: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, "Cascadia Code", "Source Code Pro", Menlo, Consolas, "Courier New", monospace;
+
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 14px;
+    --shadow-card: 0 4px 14px -2px rgba(15, 23, 42, 0.06), 0 2px 6px -1px rgba(15, 23, 42, 0.03);
+    --shadow-card-hover: 0 8px 24px -4px rgba(15, 23, 42, 0.1);
+}
+
+*, *::before, *::after {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html, body {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: 100vh;
+    margin: 0 !important;
+    padding: 0 !important;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+}
+
+a {
+    color: inherit;
+    text-decoration: none;
+}
+
+button, input, select {
+    font-family: inherit;
+    font-size: 100%;
+}
+
+/* ====================================================================
+   LAYOUT & CONTAINER (FULL WIDTH / LAYAR PENUH)
+   ==================================================================== */
+.app-layout {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+.main-content {
+    max-width: 100% !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 1.5rem 2.5rem !important;
+    box-sizing: border-box !important;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+/* Card Universal */
+.card {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-card);
+}
+
+/* Alert Banner */
+.alert-banner {
+    background: #fffbeb;
+    border: 1px solid #fde68a;
+    color: #92400e;
+    padding: 0.9rem 1.35rem;
+    border-radius: var(--radius-md);
+    font-size: 0.86rem;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.alert-icon {
+    font-size: 1.15rem;
+}
+
+/* ====================================================================
+   4 KPI SUMMARY CARDS
+   ==================================================================== */
+.kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 1.25rem;
+    width: 100% !important;
+    max-width: 100% !important;
+}
+
+.kpi-card {
+    padding: 1.35rem 1.4rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    position: relative;
+    border-top: 3px solid transparent;
+    min-width: 0;
+}
+
+.kpi-card:nth-child(1) { border-top-color: var(--emerald); }
+.kpi-card:nth-child(2) { border-top-color: var(--cyan); }
+.kpi-card:nth-child(3) { border-top-color: var(--emerald); }
+.kpi-card:nth-child(4) { border-top-color: var(--gold); }
+
+.kpi-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.75rem;
+}
+
+.kpi-title {
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+}
+
+.kpi-icon-badge {
+    font-size: 1.25rem;
+}
+
+.kpi-value {
+    font-family: var(--font-heading);
+    font-size: 1.45rem;
+    font-weight: 800;
+    letter-spacing: -0.4px;
+    margin-bottom: 0.35rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.kpi-sub {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+.text-emerald { color: #047857; }
+.text-gold { color: #b45309; }
+.text-cyan { color: #0369a1; }
+.text-muted { color: #64748b; }
+.text-right { text-align: right; }
+.text-center { text-align: center; }
+
+/* ====================================================================
+   TABLE CARD & SECTION
+   ==================================================================== */
+.table-section {
+    background: #ffffff;
+    padding: 1.75rem 2rem;
+    border-radius: var(--radius-lg);
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+}
+
+.table-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 1.25rem;
+    border-bottom: 1px solid var(--border-color);
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.section-desc {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    margin: 0;
+}
+
+/* Button Eksekusi */
+.btn-primary {
+    background: linear-gradient(135deg, #059669 0%, #047857 100%);
+    color: #ffffff;
+    border: none;
+    padding: 0.6rem 1.4rem;
+    border-radius: var(--radius-md);
+    font-family: var(--font-sans);
+    font-size: 0.86rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    box-shadow: 0 3px 12px rgba(5, 150, 105, 0.25);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 18px rgba(5, 150, 105, 0.35);
+}
+
+.btn-primary:active {
+    transform: translateY(0);
+}
+
+.btn-primary:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.btn-icon {
+    font-size: 1rem;
+}
+
+/* Search & Filter Toolbar */
+.search-input {
+    background: #f8fafc;
+    border: 1px solid var(--border-color);
+    padding: 0.55rem 0.95rem;
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    font-size: 0.85rem;
+    outline: none;
+    transition: border-color 0.2s, background 0.2s;
+    font-family: inherit;
+}
+
+.search-input:focus {
+    border-color: var(--emerald);
+    background: #ffffff;
+}
+
+.record-counter {
+    font-size: 0.8rem;
+    font-family: var(--font-mono);
+    color: var(--text-secondary);
+    background: #f1f5f9;
+    padding: 0.45rem 0.8rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-color);
+    font-weight: 600;
+}
+
+/* ====================================================================
+   DATA TABLE STYLES (7 KOLOM DIM_COUNTERPARTY_HARMONIZED)
+   ==================================================================== */
+.table-wrapper {
+    width: 100% !important;
+    overflow-x: auto;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    margin-top: 0.5rem;
+}
+
+.data-table {
+    width: 100% !important;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+    text-align: left;
+}
+
+.data-table th {
+    background: #f8fafc;
+    color: var(--text-muted);
+    font-weight: 700;
+    text-transform: uppercase;
+    font-size: 0.72rem;
+    letter-spacing: 0.5px;
+    padding: 0.9rem 1.15rem;
+    border-bottom: 1px solid var(--border-color);
+    white-space: nowrap;
+}
+
+.data-table td {
+    padding: 0.95rem 1.15rem;
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-primary);
+    white-space: nowrap;
+    background: #ffffff;
+    vertical-align: middle;
+}
+
+.data-table tr:hover td {
+    background: #f8fafc;
+}
+
+.mono-cell {
+    font-family: var(--font-mono);
+    font-size: 0.83rem;
+}
+
+/* ====================================================================
+   BADGES (LEMBAGA PEMERINGKAT & KATEGORI INVESTASI)
+   ==================================================================== */
+.badge-sovereign {
+    background: #eff6ff;
+    color: #1d4ed8;
+    border: 1px solid #bfdbfe;
+    padding: 3px 9px;
+    border-radius: 4px;
+    font-weight: 700;
+    font-size: 11.5px;
+    letter-spacing: 0.3px;
+    display: inline-block;
+}
+
+.badge-pefindo {
+    background: #eef2ff;
+    color: #4338ca;
+    border: 1px solid #c7d2fe;
+    padding: 3px 9px;
+    border-radius: 4px;
+    font-weight: 700;
+    font-size: 11.5px;
+    letter-spacing: 0.3px;
+    display: inline-block;
+}
+
+.badge-fitch {
+    background: #f0f9ff;
+    color: #0369a1;
+    border: 1px solid #bae6fd;
+    padding: 3px 9px;
+    border-radius: 4px;
+    font-weight: 700;
+    font-size: 11.5px;
+    letter-spacing: 0.3px;
+    display: inline-block;
+}
+
+.badge-unrated {
+    background: #f1f5f9;
+    color: #475569;
+    border: 1px solid #cbd5e1;
+    padding: 3px 9px;
+    border-radius: 4px;
+    font-weight: 600;
+    font-size: 11.5px;
+    display: inline-block;
+}
+
+.badge-ig {
+    background: #ecfdf5;
+    color: #047857;
+    border: 1px solid #a7f3d0;
+    padding: 4px 12px;
+    border-radius: 9999px;
+    font-weight: 600;
+    font-size: 11.5px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.badge-ig-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #10b981;
+}
+
+.badge-non-ig {
+    background: #fffbeb;
+    color: #b45309;
+    border: 1px solid #fde68a;
+    padding: 4px 12px;
+    border-radius: 9999px;
+    font-weight: 600;
+    font-size: 11.5px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.badge-non-ig-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #f59e0b;
+}
+
+/* ====================================================================
+   PAGINATION BAR (PAGINASI 10 BARIS PER HALAMAN)
+   ==================================================================== */
+.cp-pagination-wrapper {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.15rem 1.4rem;
+    background: #f8fafc;
+    border-top: 1px solid #e2e8f0;
+    font-size: 0.825rem;
+    color: #64748b;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-top: 1rem;
+    border-radius: 0 0 1rem 1rem;
+}
+
+.cp-btn-page {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.4rem 0.75rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #334155;
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    cursor: pointer;
+    text-decoration: none;
+    transition: all 0.15s ease;
+}
+
+.cp-btn-page:hover:not(.disabled):not(.active) {
+    background: #f1f5f9;
+    border-color: #94a3b8;
+    color: #0f172a;
+}
+
+.cp-btn-page.active {
+    background: #059669;
+    border-color: #059669;
+    color: #ffffff;
+    cursor: default;
+}
+
+.cp-btn-page.disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    background: #f8fafc;
+}

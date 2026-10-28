@@ -3,32 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard Treasury Engine PSAK 413</title>
+    <title>3. Penempatan Antar Bank & Nostro Devisa - PSAK 413</title>
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
-    <!-- Chart.js CDN -->
+    <!-- Chart.js CDN (Fallback ke offline canvas jika tanpa internet) -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link rel="stylesheet" href="/static/css/style.css?v=2">
+    <link rel="stylesheet" href="/static/css/interbank.css?v=5">
 </head>
 <body>
     <div class="app-layout">
-        <!-- Top Navigation -->
-        <header class="top-header">
-            <div class="header-left">
-                <div class="logo-box">
-                    <span class="logo-text" id="logoTextBadge">BAS</span>
-                </div>
-                <div>
-                    <!-- Nama Bank diambil dinamis dari tabel Ref_NamaBank -->
-                    <h1 class="system-title" id="bankNameTitle">Memuat Nama Bank...</h1>
-                    <p class="system-subtitle">PSAK 413 Treasury Engine &bull; Low Default Portfolio (LDP)</p>
-                </div>
-            </div>
-
-        </header>
-
         <!-- Main Content -->
         <main class="main-content">
             <!-- Control & Trigger Panel -->
@@ -39,13 +24,11 @@
                 </div>
 
                 <div class="control-group">
-                    <label for="moduleSelect">Target Modul Engine</label>
-                    <select id="moduleSelect">
-                        <option value="counterparty">1. Master Counterparty</option>
-                        <option value="sukuk">2. Sukuk & Integrasi Pemeringkat Eksternal</option>
-                        <option value="interbank" selected>3. Modul Penempatan Antar Bank & Nostro Devisa</option>
-                        <option value="konvergensi">4. Konvergensi Grand Master Engine (Treasury + Pembiayaan)</option>
-                    </select>
+                    <label>Target Modul Engine</label>
+                    <div class="module-indicator-box">
+                        <span class="status-dot"></span>
+                        <span class="module-title-text">3. Penempatan Antar Bank & Nostro Devisa</span>
+                    </div>
                 </div>
 
                 <div class="control-action">
@@ -59,18 +42,21 @@
             <!-- Banner Peringatan jika Database Tidak Terhubung / Kosong -->
             <div id="dbAlertBanner" style="display: none;" class="alert-banner">
                 <span class="alert-icon">⚠️</span>
-                <span id="dbAlertMessage">Koneksi ke database sedang diperiksa...</span>
+                <div class="alert-content">
+                    <strong>Pemberitahuan Sistem:</strong>
+                    <span id="dbAlertMessage">Mengecek koneksi database SQL Server...</span>
+                </div>
             </div>
 
-            <!-- KPI Cards Grid -->
+            <!-- Executive Summary (KPI Cards) -->
             <section class="kpi-grid">
                 <div class="kpi-card card">
                     <div class="kpi-header">
-                        <span class="kpi-title" id="kpi1Title">Total Eksposur / Data</span>
+                        <span class="kpi-title" id="kpi1Title">Total EAD (Exposure)</span>
                         <span class="kpi-icon-badge">💼</span>
                     </div>
-                    <div class="kpi-value text-emerald" id="kpiTotalEad">0</div>
-                    <div class="kpi-sub" id="kpi1Sub">Data Riil Database</div>
+                    <div class="kpi-value text-emerald" id="kpiTotalEad">Rp 0,00</div>
+                    <div class="kpi-sub" id="kpi1Sub"></div>
                 </div>
 
                 <div class="kpi-card card">
@@ -78,14 +64,14 @@
                         <span class="kpi-title" id="kpi2Title">Total Beban CKPN (ECL)</span>
                         <span class="kpi-icon-badge">🛡️</span>
                     </div>
-                    <div class="kpi-value text-gold" id="kpiTotalCkpn">Rp 0,00</div>
-                    <div class="kpi-sub" id="kpiCoverage">Coverage: 0.000%</div>
+                    <div class="kpi-value text-amber" id="kpiTotalCkpn">Rp 0,00</div>
+                    <div class="kpi-sub" id="kpiCoverage">Coverage: 0.0000%</div>
                 </div>
 
                 <div class="kpi-card card">
                     <div class="kpi-header">
                         <span class="kpi-title" id="kpi3Title">Distribusi Staging PSAK</span>
-                        <span class="kpi-icon-badge">⚖️</span>
+                        <span class="kpi-icon-badge">📊</span>
                     </div>
                     <div class="staging-pill-group">
                         <div class="stage-pill s1">
@@ -101,44 +87,60 @@
 
                 <div class="kpi-card card">
                     <div class="kpi-header">
-                        <span class="kpi-title" id="kpi4Title">Rata-rata PD Rate</span>
+                        <span class="kpi-title" id="kpi4Title">Rata-rata Short-Term PD</span>
                         <span class="kpi-icon-badge">📈</span>
                     </div>
                     <div class="kpi-value text-cyan" id="kpiAvgPd">0.0000%</div>
-                    <div class="kpi-sub" id="kpi4Sub">Probabilitas Default Riil</div>
+                    <div class="kpi-sub" id="kpi4Sub"></div>
                 </div>
             </section>
 
             <!-- Charts Section -->
             <section class="charts-section">
+                <!-- Chart 1: Donat Portofolio dengan Hover Tooltip -->
                 <div class="chart-card card">
                     <div class="chart-header">
-                        <h3 id="chart1Title">Distribusi Portofolio</h3>
-                        <span class="tag-badge" id="chart1Tag">Data Riil</span>
+                        <div class="chart-header-left">
+                            <h3 id="chart1Title">Porsi Portofolio Pasar Uang & Nostro</h3>
+                        </div>
+                        <span class="tag-badge" id="chart1Tag">Eksposur Riil</span>
                     </div>
-                    <div class="chart-container">
+                    <div class="chart-container" id="chart1Wrapper">
                         <canvas id="chartInstruments" style="display: none;"></canvas>
                         <div id="chart1Empty" class="chart-empty-state" style="display: flex;">
                             <span class="empty-icon">📊</span>
                             <span class="empty-title">Belum Ada Data Transaksi</span>
-                            <span class="empty-desc">Grafik akan terisi otomatis saat tabel database terisi</span>
+                            <span class="empty-desc">Grafik akan terisi otomatis saat kalkulasi dijalankan</span>
                         </div>
+                        <!-- Mockup Tooltip Floating Hover Card -->
                         <div id="chartTooltip" class="chart-tooltip" style="display: none;"></div>
                     </div>
                     <div id="chart1Legend" class="chart-legend-box" style="display: none;"></div>
                 </div>
 
+                <!-- Chart 2: Distribusi Risiko per Counterparty dengan Filter Top N -->
                 <div class="chart-card card">
                     <div class="chart-header">
-                        <h3 id="chart2Title">Distribusi Risiko</h3>
-                        <span class="tag-badge" id="chart2Tag">Data Riil</span>
+                        <div class="chart-header-left">
+                            <h3 id="chart2Title">Beban CKPN per Mitra Bank</h3>
+                        </div>
+                        <div class="chart-filter-box">
+                            <label for="chart2TopFilter" class="filter-label">Filter:</label>
+                            <select id="chart2TopFilter" class="select-ddr-mini">
+                                <option value="5">Top 5</option>
+                                <option value="10" selected>Top 10</option>
+                                <option value="20">Top 20</option>
+                                <option value="all">Semua</option>
+                            </select>
+                            <span class="tag-badge" id="chart2Tag">Cadangan Riil</span>
+                        </div>
                     </div>
-                    <div class="chart-container">
+                    <div class="chart-container" id="chart2Wrapper">
                         <canvas id="chartCounterparty" style="display: none;"></canvas>
                         <div id="chart2Empty" class="chart-empty-state" style="display: flex;">
                             <span class="empty-icon">📈</span>
                             <span class="empty-title">Belum Ada Data Risiko</span>
-                            <span class="empty-desc">Grafik akan terisi otomatis saat tabel database terisi</span>
+                            <span class="empty-desc">Grafik akan terisi otomatis saat kalkulasi dijalankan</span>
                         </div>
                     </div>
                 </div>
@@ -148,10 +150,21 @@
             <section class="table-section card">
                 <div class="table-header">
                     <div>
-                        <h2 id="tableTitle">Data Portofolio</h2>
-                        <p class="section-desc" id="tableSubtitle">Membaca langsung dari tabel database SQL Server (iPSAK71)</p>
+                        <h2 id="tableTitle">Rincian Transaksi Portofolio Pasar Uang & Nostro</h2>
+                        <p class="section-desc" id="tableSubtitle">Membaca langsung dari tabel database SQL Server</p>
                     </div>
                     <div class="table-actions">
+                        <input type="text" id="searchInput" placeholder="Cari deal / mitra bank..." class="search-input">
+                        
+                        <!-- Dropdown Filter Instrumen (FASBIS, NOSTRO, WADIAH, MUDHARABAH) -->
+                        <div class="filter-box">
+                            <label for="filterInstrument">Instrumen:</label>
+                            <select id="filterInstrument" class="select-ddr">
+                                <option value="">Semua Instrumen</option>
+                            </select>
+                        </div>
+
+                        <!-- Dropdown Baris (DDR 5, 10, 25, 50, 100) -->
                         <div class="page-size-box">
                             <label for="pageSizeDeals">Tampilkan:</label>
                             <select id="pageSizeDeals" class="select-ddr">
@@ -162,19 +175,17 @@
                                 <option value="100">100</option>
                             </select>
                         </div>
-                        <input type="text" id="searchInput" placeholder="Cari data..." class="search-input">
-                        <span class="record-counter" id="recordCounter">0 Baris</span>
                     </div>
                 </div>
 
                 <div class="table-wrapper">
                     <table class="data-table" id="dealsTable">
                         <thead id="dealsTableHead">
-                            <!-- Injected dynamically based on selected module -->
+                            <!-- Injected dynamically -->
                         </thead>
                         <tbody id="dealsTableBody">
                             <tr>
-                                <td colspan="11" class="text-center py-4 text-muted">Mengecek data di database...</td>
+                                <td colspan="11" class="text-center py-4 text-muted">Memuat data dari database...</td>
                             </tr>
                         </tbody>
                     </table>
@@ -190,6 +201,7 @@
                         <p class="section-desc">Hasil rekapitulasi nilai nominal cadangan kerugian penurunan nilai untuk pembukuan</p>
                     </div>
                     <div class="journal-actions">
+                        <!-- Dropdown Baris (DDR 5, 10, 25, 50, 100) -->
                         <div class="page-size-box">
                             <label for="pageSizeJournal">Tampilkan:</label>
                             <select id="pageSizeJournal" class="select-ddr">
@@ -223,12 +235,47 @@
             </section>
         </main>
 
-        <!-- Footer -->
-        <footer class="app-footer">
-            <p id="footerText">Dashboard PSAK 413 &bull; Bank Aceh Syariah</p>
-        </footer>
     </div>
 
-    <script src="/static/js/app.js?v=6"></script>
+    <!-- Mockup Modal Konfirmasi Eksekusi Kalkulasi Engine -->
+    <div id="confirmModal" class="modal-overlay">
+        <div class="modal-card">
+            <div class="modal-header">
+                <div class="modal-icon-badge">⚡</div>
+                <div class="modal-title-box">
+                    <h3>Konfirmasi Eksekusi Engine</h3>
+                    <p>PSAK 413 Treasury Engine &bull; Low Default Portfolio</p>
+                </div>
+            </div>
+            <div class="modal-body">
+                <p>Apakah Anda yakin ingin menjalankan proses kalkulasi EAD, Staging, dan beban CKPN untuk modul ini?</p>
+                
+                <div class="modal-info-box">
+                    <div class="modal-info-row">
+                        <span class="modal-info-label">Target Modul:</span>
+                        <span class="modal-info-val emerald">3. Penempatan Antar Bank & Nostro Devisa</span>
+                    </div>
+                    <div class="modal-info-row">
+                        <span class="modal-info-label">Tanggal Cut-Off:</span>
+                        <span class="modal-info-val" id="modalCutOffDisplay">31/10/2026</span>
+                    </div>
+                    <div class="modal-info-row">
+                        <span class="modal-info-label">Tindakan:</span>
+                        <span class="modal-info-val">ETL SQL Staging & Pembaruan Fact ECL</span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" id="btnCancelModal" class="btn-secondary">Batal</button>
+                <button type="button" id="btnConfirmRun" class="btn-confirm-run">
+                    <span>⚡</span>
+                    <span>Ya, Jalankan Kalkulasi</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Script JavaScript Khusus Modul 3 -->
+    <script src="/static/js/interbank.js?v=11"></script>
 </body>
 </html>

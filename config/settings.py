@@ -1,9 +1,13 @@
 import os
+import sys
 import urllib.parse
 from pathlib import Path
 from dotenv import load_dotenv
 
-BASE_DIR = Path(__file__).resolve().parent.parent
+if getattr(sys, 'frozen', False):
+    BASE_DIR = Path(sys.executable).resolve().parent
+else:
+    BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Load .env if present
 env_path = BASE_DIR / ".env"
@@ -13,6 +17,10 @@ else:
     load_dotenv(dotenv_path=BASE_DIR / ".env.example")
 
 class Settings:
+    # Server Settings
+    SERVER_HOST: str = os.getenv("SERVER_HOST", "0.0.0.0")
+    SERVER_PORT: int = int(os.getenv("SERVER_PORT", "5000"))
+
     # SQL Server Driver & Connection (Default driver di Windows: "SQL Server")
     DB_DRIVER: str = os.getenv("DB_DRIVER", "SQL Server")
     DB_HOST: str = os.getenv("DB_HOST", "localhost")

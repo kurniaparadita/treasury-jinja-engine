@@ -1,7 +1,13 @@
+import sys
 from jinja2 import Environment, FileSystemLoader
 from pathlib import Path
 
-SQL_DIR = Path(__file__).resolve().parent.parent / "sql"
+if getattr(sys, 'frozen', False):
+    SQL_DIR = Path(sys.executable).resolve().parent / "sql"
+    if not SQL_DIR.exists() and hasattr(sys, '_MEIPASS'):
+        SQL_DIR = Path(sys._MEIPASS) / "sql"
+else:
+    SQL_DIR = Path(__file__).resolve().parent.parent / "sql"
 jinja_env = Environment(
     loader=FileSystemLoader(str(SQL_DIR)),
     autoescape=False,

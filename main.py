@@ -41,7 +41,8 @@ Contoh Penggunaan:
     
     parser.add_argument(
         "--cut-off",
-        required=True,
+        required=False,
+        default="2026-10-31",
         type=validate_date,
         help="Tanggal Cut Off posisi pelaporan (format: YYYY-MM-DD, contoh: 2026-10-31)"
     )

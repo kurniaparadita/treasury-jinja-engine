@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PSAK 413 - Master Counterparty Harmonization (Ahmad)</title>
+    <!-- 100% Offline Standalone Styling Modul Ahmad (Tanpa Ketergantungan Internet & style.css) -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/counterparty.css') }}?v=11">
+</head>
+<body style="background-color: var(--bg-primary); min-height: 100vh; margin: 0; padding: 0;">
+    <div class="app-layout" style="width: 100%; max-width: 100%; margin: 0; padding: 0;">
+        <!-- Main Content (Full Width / Full Layar) -->
+        <main class="main-content" style="max-width: 100% !important; width: 100% !important; margin: 0 !important; padding: 1.5rem 2.5rem !important; box-sizing: border-box;">
+            
+            <!-- Database Alert / Warning if any -->
+            {% if db_error %}
+            <div class="alert-banner" style="margin-bottom: 0.5rem;">
+                <span class="alert-icon">⚠️</span>
+                <span>{{ db_error }}</span>
+            </div>
+            {% endif %}
+
+            <!-- 4 KPI Cards Grid (Angka Entitas Murni, TANPA Format Rupiah) -->
+            <section class="kpi-grid">
+                <div class="kpi-card card">
+                    <div class="kpi-header">
+                        <span class="kpi-title">Total Counterparty</span>
+                        <span class="kpi-icon-badge">💼</span>
+                    </div>
+                    <div class="kpi-value text-emerald">{{ summary.total_counterparty or 0 }} Entitas</div>
+                    <div class="kpi-sub">Tabel dim_counterparty_harmonized</div>
+                </div>
+
+                <div class="kpi-card card">
+                    <div class="kpi-header">
+                        <span class="kpi-title">Sovereign (0.01% PD)</span>
+                        <span class="kpi-icon-badge">🏛️</span>
+                    </div>
+                    <div class="kpi-value text-cyan">{{ summary.total_sovereign or 0 }} Entitas</div>
+                    <div class="kpi-sub">Pemerintah Pusat & Bank Indonesia</div>
+                </div>
+
+                <div class="kpi-card card">
+                    <div class="kpi-header">
+                        <span class="kpi-title">Investment Grade</span>
+                        <span class="kpi-icon-badge">📈</span>
+                    </div>
+                    <div class="kpi-value text-emerald">{{ summary.total_ig or 0 }} Entitas</div>
+                    <div class="kpi-sub">Rating Prima (PEFINDO, FITCH, dll)</div>
+                </div>
+
+                <div class="kpi-card card">
+                    <div class="kpi-header">
+                        <span class="kpi-title">Unrated / Fallback (5.00%)</span>
+                        <span class="kpi-icon-badge">⚠️</span>
+                    </div>
+                    <div class="kpi-value text-gold">{{ summary.total_unrated or 0 }} Entitas</div>
+                    <div class="kpi-sub">Konservatif (Tanpa Rating Eksternal)</div>
+                </div>
+            </section>
+
+            <!-- Table Section Card: Disatukan dengan Tanggal Cut-Off & Tombol Eksekusi -->
+            <section class="table-section card" style="background: #ffffff; padding: 1.75rem 2rem; border-radius: var(--radius-lg);">
+                
+                <!-- Card Header Atas: Judul Tabel + Tanggal Cut-Off + Tombol Eksekusi Harmonize -->
+                <div class="table-header" style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 1.25rem; border-bottom: 1px solid var(--border-color); flex-wrap: wrap; gap: 1rem;">
+                    <div>
+                        <h2 style="font-size: 1.2rem; font-weight: 700; color: var(--text-primary); margin-bottom: 0.25rem;">
+                            Golden Record Master Counterparty (dim_counterparty_harmonized)
+                        </h2>
+                        <p class="section-desc" style="margin: 0;">
+                            Data resmi tabel dim_counterparty_harmonized hasil konsolidasi & resolusi multi-rating (PSAK 413)
+                        </p>
+                    </div>
+
+                    <!-- Tombol Eksekusi Harmonize (Input Cut-Off Dihapus, Otomatis Menggunakan EOM M-1) -->
+                    <div style="display: flex; align-items: center; gap: 0.85rem;">
+                        <input type="hidden" id="cutOffDate" value="{{ cut_off or '2026-09-30' }}" />
+                        <button type="button" onclick="triggerHarmonize()" id="btnHarmonize" class="btn-primary" style="padding: 0.6rem 1.45rem; font-size: 0.88rem;">
+                            <span class="btn-icon">⚡</span>
+                            <span id="btnText">Tarik Data Antasena & Harmonisasi Rating</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Sub-Toolbar: Filter Rentang Tanggal (Between), Pencarian & Kategori -->
+                <div style="margin-top: 1.25rem; margin-bottom: 1.25rem; padding: 1rem 1.25rem; background: #f8fafc; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+                    <form method="GET" action="" style="display: flex; gap: 0.75rem; align-items: center; justify-content: space-between; flex-wrap: wrap;">
+                        <div style="display: flex; gap: 0.65rem; align-items: center; flex-wrap: wrap;">
+                            <!-- Filter Periode Data Between -->
+                            <div style="display: flex; align-items: center; gap: 0.4rem; background: #ffffff; padding: 0.35rem 0.65rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+                                <label style="font-size: 0.75rem; font-weight: 700; color: #475569; text-transform: uppercase;">Dari:</label>
+                                <input 
+                                    type="date" 
+                                    name="start_date" 
+                                    value="{{ start_date }}" 
+                                    style="border: none; background: transparent; font-size: 0.82rem; font-weight: 600; color: #0f172a; outline: none; cursor: pointer;"
+                                />
+                                <span style="color: #94a3b8; font-size: 0.8rem;">s/d</span>
+                                <input 
+                                    type="date" 
+                                    name="end_date" 
+                                    value="{{ end_date }}" 
+                                    style="border: none; background: transparent; font-size: 0.82rem; font-weight: 600; color: #0f172a; outline: none; cursor: pointer;"
+                                />
+                            </div>
+
+                            <input 
+                                type="text" 
+                                name="search" 
+                                value="{{ search }}" 
+                                placeholder="Cari Sandi / Nama Institusi..." 
+                                class="search-input"
+                                style="width: 230px;"
+                            />
+                            <select 
+                                name="kategori" 
+                                class="search-input" 
+                                style="width: 190px; cursor: pointer;">
+                                <option value="" {% if not kategori %}selected{% endif %}>Semua Kategori</option>
+                                <option value="INVESTMENT GRADE" {% if kategori == 'INVESTMENT GRADE' %}selected{% endif %}>INVESTMENT GRADE</option>
+                                <option value="NON-INVESTMENT GRADE" {% if kategori == 'NON-INVESTMENT GRADE' %}selected{% endif %}>NON-INVESTMENT GRADE</option>
+                            </select>
+
+                            <button type="submit" class="btn-primary" style="padding: 0.5rem 1rem; font-size: 0.82rem;">
+                                <span>Filter</span>
+                            </button>
+
+                            {% if search or kategori or start_date or end_date %}
+                            <a href="?" class="cp-btn-page" style="padding: 0.5rem 0.85rem;">Reset Filter</a>
+                            {% endif %}
+                        </div>
+
+                        <span class="record-counter">{{ total_records }} Data</span>
+                    </form>
+                </div>
+
+                <!-- Table Content (7 Kolom dim_counterparty_harmonized) -->
+                <div class="table-wrapper">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Sandi Pihak Lawan</th>
+                                <th>Nama Institusi</th>
+                                <th>Golongan Antasena</th>
+                                <th>Lembaga Final</th>
+                                <th>Rating Final</th>
+                                <th>Kategori Investasi</th>
+                                <th class="text-right">Base TTC PD</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in records %}
+                            <tr>
+                                <td class="mono-cell" style="font-weight: 700; color: #0284c7;">{{ row.sandi_pihak_lawan }}</td>
+                                <td style="font-weight: 600; color: #0f172a;">{{ row.nama_institusi }}</td>
+                                <td><span style="background: #f1f5f9; padding: 2px 8px; border-radius: 4px; font-size: 12px; color: #475569;">{{ row.golongan_antasena }}</span></td>
+                                <td>
+                                    {% if row.lembaga_rating_final == 'SOVEREIGN_OJK' %}
+                                        <span class="badge-sovereign">SOVEREIGN</span>
+                                    {% elif row.lembaga_rating_final == 'PEFINDO' %}
+                                        <span class="badge-pefindo">PEFINDO</span>
+                                    {% elif row.lembaga_rating_final == 'FITCH' %}
+                                        <span class="badge-fitch">FITCH</span>
+                                    {% else %}
+                                        <span class="badge-unrated">{{ row.lembaga_rating_final }}</span>
+                                    {% endif %}
+                                </td>
+                                <td class="mono-cell" style="font-weight: 700; color: #0f172a;">{{ row.kode_rating_final }}</td>
+                                <td>
+                                    {% if row.kategori_investasi == 'INVESTMENT GRADE' %}
+                                        <span class="badge-ig"><span class="badge-ig-dot"></span>INVESTMENT GRADE</span>
+                                    {% else %}
+                                        <span class="badge-non-ig"><span class="badge-non-ig-dot"></span>NON-INVESTMENT GRADE</span>
+                                    {% endif %}
+                                </td>
+                                <td class="mono-cell text-right" style="font-weight: 700; color: #059669;">{{ "%.4f"|format(row.base_ttc_pd * 100) }}%</td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="7" class="text-center py-5 text-muted" style="text-align: center; padding: 3rem 1.5rem;">
+                                    <div style="font-size: 2rem; margin-bottom: 0.5rem;">📭</div>
+                                    <strong>Tidak ada data ditemukan di tabel dim_counterparty_harmonized.</strong><br>
+                                    <span style="font-size: 0.8rem; color: #94a3b8;">Silakan klik tombol "Tarik Data Antasena & Harmonisasi Rating" di atas.</span>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Paging Controls (10 data per halaman) -->
+                {% if total_records > 0 %}
+                <div class="cp-pagination-wrapper">
+                    <div>
+                        Menampilkan <strong>{{ start_idx }} - {{ end_idx }}</strong> dari total <strong>{{ total_records }}</strong> data 
+                        (Halaman <strong>{{ page }}</strong> dari <strong>{{ total_pages }}</strong>)
+                    </div>
+                    <div style="display: flex; gap: 0.35rem; align-items: center;">
+                        {% if has_prev %}
+                        <a href="?page={{ prev_page }}{% if search %}&search={{ search }}{% endif %}{% if kategori %}&kategori={{ kategori }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}" class="cp-btn-page">&larr; Sebelumnya</a>
+                        {% else %}
+                        <span class="cp-btn-page disabled">&larr; Sebelumnya</span>
+                        {% endif %}
+
+                        {% for p in range(1, total_pages + 1) %}
+                            {% if p == page %}
+                            <span class="cp-btn-page active">{{ p }}</span>
+                            {% elif p <= 5 or p >= total_pages - 1 or (p >= page - 1 and p <= page + 1) %}
+                            <a href="?page={{ p }}{% if search %}&search={{ search }}{% endif %}{% if kategori %}&kategori={{ kategori }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}" class="cp-btn-page">{{ p }}</a>
+                            {% elif p == 6 %}
+                            <span style="padding: 0 4px; color: #94a3b8;">...</span>
+                            {% endif %}
+                        {% endfor %}
+
+                        {% if has_next %}
+                        <a href="?page={{ next_page }}{% if search %}&search={{ search }}{% endif %}{% if kategori %}&kategori={{ kategori }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}" class="cp-btn-page">Selanjutnya &rarr;</a>
+                        {% else %}
+                        <span class="cp-btn-page disabled">Selanjutnya &rarr;</span>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
+            </section>
+        </main>
+    </div>
+
+    <!-- Script Khusus Modul Ahmad -->
+    <script src="{{ url_for('static', filename='js/counterparty.js') }}?v=11"></script>
+</body>
+</html>

@@ -3,7 +3,11 @@ import sys
 from pathlib import Path
 from config.settings import settings
 
-LOG_DIR = Path(__file__).resolve().parent.parent / "logs"
+if getattr(sys, 'frozen', False):
+    LOG_DIR = Path(sys.executable).resolve().parent / "logs"
+else:
+    LOG_DIR = Path(__file__).resolve().parent.parent / "logs"
+
 LOG_DIR.mkdir(exist_ok=True)
 
 def get_logger(name: str = "TreasuryEngine") -> logging.Logger:

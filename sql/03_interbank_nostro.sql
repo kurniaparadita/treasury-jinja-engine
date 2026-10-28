@@ -4,9 +4,10 @@
 -- Parameter Jinja: {{ tgl_cut_off }}
 -- ====================================================================
 
--- 1. Bersihkan data fact pada tanggal cut-off yang sama (Idempotency)
+-- 1. Bersihkan data fact yang akan dihitung ulang (Idempotency)
 DELETE FROM fact_ldp_interbank_ecl 
-WHERE tgl_cut_off = CAST('{{ tgl_cut_off }}' AS DATE);
+WHERE id_penempatan IN (SELECT id_penempatan FROM staging_treasury_interbank)
+   OR tgl_cut_off = CAST('{{ tgl_cut_off }}' AS DATE);
 
 -- 2. Injeksi Kerangka EAD, LGD, dan Initial Annual PD
 INSERT INTO fact_ldp_interbank_ecl (

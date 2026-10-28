@@ -1,4 +1,4 @@
-// State Variables
+// Dedicated JavaScript for Modul 3: Penempatan Antar Bank & Nostro Devisa
 let chartInstInstance = null;
 let chartCounterpartyInstance = null;
 let currentRecords = [];
@@ -10,6 +10,10 @@ let journalPageSize = 5;
 let journalCurrentPage = 1;
 let doughnutSlices = [];
 let doughnutHoverIdx = -1;
+let chart2FilterMode = '10'; // Default Top 10
+let rawChart2Data = {};
+let rawChart2Title = '';
+let rawChart2Tag = '';
 
 // Helper Format Currency (IDR)
 function formatRupiah(amount) {
@@ -28,13 +32,7 @@ async function checkSystemStatus() {
         const res = await fetch('/api/status');
         const data = await res.json();
         
-        // 1. Update Nama Bank dari Ref_NamaBank (Poin 3)
-        if (data.bank_name) {
-            document.getElementById('bankNameTitle').textContent = data.bank_name;
-            document.getElementById('footerText').innerHTML = `Dashboard PSAK 413 &bull; ${data.bank_name}`;
-        }
 
-        // 2. Update Alert Banner jika database belum terhubung
         const alertBanner = document.getElementById('dbAlertBanner');
         const alertMsg = document.getElementById('dbAlertMessage');
 
@@ -51,12 +49,37 @@ async function checkSystemStatus() {
     }
 }
 
-// Run Engine API
+// Run Engine for Module 3 (Interbank)
+
+// Fetch data tanpa kalkulasi ulang pipeline
+async function fetchAndRenderData(cutOff) {
+    const btn = document.getElementById('btnRunEngine');
+    const btnText = document.getElementById('btnText');
+    if (btn) btn.disabled = true;
+    if (btnText) btnText.textContent = 'Memuat Data...';
+
+    try {
+        const response = await fetch(`/api/interbank/data?cut_off=${encodeURIComponent(cutOff)}`);
+        if (response.ok) {
+            const data = await response.json();
+            if (data.success) {
+                updateDashboard(data);
+            }
+        } else {
+            console.error('Gagal mengambil data cut-off:', response.statusText);
+        }
+    } catch (err) {
+        console.error('Koneksi server gagal:', err);
+    } finally {
+        if (btn) btn.disabled = false;
+        if (btnText) btnText.textContent = 'Jalankan Kalkulasi';
+    }
+}
+
 async function runEngine() {
     const btn = document.getElementById('btnRunEngine');
     const btnText = document.getElementById('btnText');
     const cutOff = document.getElementById('cutOffDate').value;
-    const module = document.getElementById('moduleSelect').value;
 
     btn.disabled = true;
     btnText.textContent = 'Mengeksekusi...';
@@ -67,7 +90,7 @@ async function runEngine() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 cut_off: cutOff,
-                module: module
+                module: 'interbank'
             })
         });
 
@@ -86,28 +109,35 @@ async function runEngine() {
 }
 
 // Render Badge Warna & Rincian di Bawah Chart (Poin 2)
-function renderChart1Legend(labels, values, colors) {
+function renderChart1Legend(labels, values, colors, chartTitle) {
     const legendBox = document.getElementById('chart1Legend');
     if (!legendBox) return;
     const total = values.reduce((a, b) => a + Number(b || 0), 0);
+    const titleStr = String(chartTitle || '').toLowerCase();
+    const isMoney = titleStr.includes('ead') || titleStr.includes('portofolio') || titleStr.includes('eksposur') || titleStr.includes('ckpn') || total > 1000000;
+
     legendBox.style.display = 'flex';
     legendBox.innerHTML = labels.map((lbl, idx) => {
         const val = Number(values[idx] || 0);
         const pct = total > 0 ? ((val / total) * 100).toFixed(1) : '0.0';
         const color = colors[idx % colors.length];
         let valFormatted;
-        if (val >= 1000000000) {
-            valFormatted = (val / 1000000000).toFixed(2) + ' M';
-        } else if (val >= 1000000) {
-            valFormatted = (val / 1000000).toFixed(1) + ' Jt';
+        if (isMoney) {
+            if (val >= 1000000000) {
+                valFormatted = 'Rp ' + (val / 1000000000).toFixed(2) + ' M';
+            } else if (val >= 1000000) {
+                valFormatted = 'Rp ' + (val / 1000000).toFixed(1) + ' Jt';
+            } else {
+                valFormatted = 'Rp ' + val.toLocaleString('id-ID');
+            }
         } else {
-            valFormatted = val.toLocaleString('id-ID');
+            valFormatted = val.toLocaleString('id-ID') + ' Mitra';
         }
         return `
             <div class="legend-chip">
                 <span class="legend-color-dot" style="background-color: ${color};"></span>
                 <span class="legend-chip-title">${lbl}:</span>
-                <span class="legend-chip-val">Rp ${valFormatted} (${pct}%)</span>
+                <span class="legend-chip-val">${valFormatted} (${pct}%)</span>
             </div>
         `;
     }).join('');
@@ -123,10 +153,6 @@ function updateDashboard(data) {
     dealsCurrentPage = 1;
     journalCurrentPage = 1;
 
-    // 1. Update Nama Bank jika ada
-    if (data.bank_name) {
-        document.getElementById('bankNameTitle').textContent = data.bank_name;
-    }
 
     // 2. Update KPI Labels and Values
     document.getElementById('kpi1Title').textContent = summary.kpi1_title;
@@ -147,12 +173,13 @@ function updateDashboard(data) {
     document.getElementById('kpiAvgPd').textContent = summary.kpi4_val;
     document.getElementById('kpi4Sub').textContent = summary.kpi4_sub;
 
-    // 3. Update Table Titles
-    document.getElementById('tableTitle').textContent = tableData.title || "Data Portofolio Riil";
+    // 3. Update Table Titles & Populate Instrument Filter
+    document.getElementById('tableTitle').textContent = tableData.title || "Rincian Transaksi Portofolio Pasar Uang & Nostro";
     document.getElementById('tableSubtitle').textContent = tableData.subtitle || "";
+    populateInstrumentFilter(currentRecords);
 
     // 4. Render Table
-    renderTable(currentHeaders, currentRecords, data.cut_off);
+    renderTable(currentHeaders, getFilteredDealsRecords(), data.cut_off);
 
     // 5. Render Charts
     renderCharts(data.charts || {});
@@ -208,10 +235,9 @@ function drawOfflineDoughnut(canvas, labels, values) {
         currentAngle = endAngle;
     });
 
-    // Render Badge Warna & Rincian di Bawah Chart (Poin 2)
-    renderChart1Legend(labels, values, colors);
+    renderChart1Legend(labels, values, colors, "Komposisi EAD per Jenis Instrumen");
 
-    // Attach Interactive Hover Tooltip Listener (Poin 5)
+    // Attach Interactive Hover Tooltip Listener
     if (!canvas._hasHoverListener) {
         canvas._hasHoverListener = true;
         const tooltip = document.getElementById('chartTooltip');
@@ -260,7 +286,6 @@ function drawOfflineDoughnut(canvas, labels, values) {
                 }
             }
 
-            // Di luar irisan donat
             if (doughnutHoverIdx !== -1) {
                 doughnutHoverIdx = -1;
                 drawOfflineDoughnut(canvas, labels, values);
@@ -278,7 +303,7 @@ function drawOfflineDoughnut(canvas, labels, values) {
     }
 }
 
-function drawOfflineBar(canvas, labels, values) {
+function drawOfflineBar(canvas, labels, values, chartTitle) {
     const ctx = canvas.getContext('2d');
     const width = canvas.width = canvas.parentElement.clientWidth || 300;
     const height = canvas.height = canvas.parentElement.clientHeight || 280;
@@ -286,25 +311,30 @@ function drawOfflineBar(canvas, labels, values) {
 
     const numValues = values.map(v => Number(v || 0));
     const maxVal = Math.max(...numValues, 0);
-    const isRate = maxVal <= 1.0 && maxVal > 0;
-    const padding = { top: 30, bottom: 35, left: 25, right: 20 };
+    const titleStr = String(chartTitle || '').toLowerCase();
+    const isRate = titleStr.includes('%') || titleStr.includes('rate') || titleStr.includes('pd') || (maxVal <= 1.0 && maxVal > 0);
+    const isCount = titleStr.includes('jumlah') || titleStr.includes('mitra') || titleStr.includes('institusi') || titleStr.includes('item');
+
+    const count = Math.max(numValues.length, 1);
+    const isRotated = count > 5;
+    const padding = { top: 30, bottom: isRotated ? 85 : 55, left: 30, right: 25 };
     const chartW = width - padding.left - padding.right;
     const chartH = height - padding.top - padding.bottom;
-    const barWidth = Math.min(45, (chartW / Math.max(numValues.length, 1)) * 0.65);
-    const gap = chartW / Math.max(numValues.length, 1);
+    const barWidth = Math.min(38, Math.max(12, (chartW / count) * 0.6));
+    const gap = chartW / count;
+    const baselineY = padding.top + chartH;
 
-    // Garis dasar (baseline)
     ctx.strokeStyle = '#e2e8f0';
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(padding.left, padding.top + chartH);
-    ctx.lineTo(padding.left + chartW, padding.top + chartH);
+    ctx.moveTo(padding.left, baselineY);
+    ctx.lineTo(padding.left + chartW, baselineY);
     ctx.stroke();
 
     numValues.forEach((val, idx) => {
         const barH = maxVal > 0 ? (val / maxVal) * chartH : 0;
         const x = padding.left + (idx * gap) + (gap - barWidth) / 2;
-        const y = padding.top + chartH - barH;
+        const y = baselineY - barH;
 
         if (barH > 0) {
             ctx.fillStyle = 'rgba(217, 119, 6, 0.85)';
@@ -317,14 +347,16 @@ function drawOfflineBar(canvas, labels, values) {
             }
         }
 
-        // Teks nilai di atas batang
         ctx.fillStyle = val > 0 ? '#0f172a' : '#94a3b8';
         ctx.font = '600 10px "JetBrains Mono", monospace';
         ctx.textAlign = 'center';
         
         let displayVal;
         if (isRate) {
-            displayVal = (val * 100).toFixed(2) + '%';
+            const pctVal = val > 1.0 ? val : val * 100;
+            displayVal = pctVal.toFixed(2) + '%';
+        } else if (isCount) {
+            displayVal = val.toLocaleString('id-ID') + ' Mitra';
         } else if (val >= 1000000000) {
             displayVal = (val / 1000000000).toFixed(2) + ' M';
         } else if (val >= 1000000) {
@@ -332,30 +364,189 @@ function drawOfflineBar(canvas, labels, values) {
         } else if (val > 0) {
             displayVal = 'Rp ' + val.toLocaleString('id-ID');
         } else {
-            displayVal = 'Rp 0';
+            displayVal = isRate ? '0.00%' : 'Rp 0';
         }
-        ctx.fillText(displayVal, x + barWidth / 2, y - 6);
 
-        // Label pihak lawan di bawah
+        if (count <= 12) {
+            ctx.fillText(displayVal, x + barWidth / 2, y - 6);
+        }
+
+        ctx.save();
         ctx.fillStyle = '#475569';
-        ctx.font = '700 11px Inter, sans-serif';
-        const lbl = String(labels[idx] || '').substring(0, 10);
-        ctx.fillText(lbl, x + barWidth / 2, height - 12);
+        ctx.font = '600 10px Inter, sans-serif';
+        const lbl = String(labels[idx] || '');
+        const centerX = x + barWidth / 2;
+        const labelY = baselineY + 8;
+
+                if (isRotated) {
+            ctx.translate(centerX, labelY);
+            ctx.rotate(-Math.PI / 4);
+            ctx.textAlign = 'right';
+            ctx.textBaseline = 'top';
+            ctx.fillText(lbl, 0, 0);
+        } else {
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
+            // Word-wrap multiline agar nama lengkap institusi tidak terpotong sama sekali
+            const maxWidth = Math.max(gap - 10, 70);
+            const words = lbl.split(' ');
+            const lines = [];
+            let curLine = '';
+            for (let w = 0; w < words.length; w++) {
+                const testLine = curLine ? curLine + ' ' + words[w] : words[w];
+                if (ctx.measureText(testLine).width > maxWidth && curLine) {
+                    lines.push(curLine);
+                    curLine = words[w];
+                } else {
+                    curLine = testLine;
+                }
+            }
+            if (curLine) lines.push(curLine);
+
+            lines.forEach((lineText, lIdx) => {
+                ctx.fillText(lineText, centerX, labelY + (lIdx * 13));
+            });
+        }
+        ctx.restore();
     });
 }
 
-// Render Charts Dynamically (Mendukung Online & Offline Tanpa Internet)
+// Render Chart 2 with Top N Filter
+function applyChart2FilterAndRender() {
+    const c2Title = document.getElementById('chart2Title');
+    const c2Tag = document.getElementById('chart2Tag');
+    const c2Canvas = document.getElementById('chartCounterparty');
+    const c2Empty = document.getElementById('chart2Empty');
+
+    c2Title.textContent = rawChart2Title;
+    c2Tag.textContent = rawChart2Tag;
+
+    const entries = Object.entries(rawChart2Data || {});
+    if (entries.length === 0) {
+        c2Canvas.style.display = 'none';
+        if (c2Empty) c2Empty.style.display = 'flex';
+        if (chartCounterpartyInstance && typeof chartCounterpartyInstance.destroy === 'function') {
+            chartCounterpartyInstance.destroy();
+            chartCounterpartyInstance = null;
+        }
+        return;
+    }
+
+    c2Canvas.style.display = 'block';
+    if (c2Empty) c2Empty.style.display = 'none';
+
+    entries.sort((a, b) => Number(b[1] || 0) - Number(a[1] || 0));
+
+    let filteredEntries = entries;
+    if (chart2FilterMode !== 'all') {
+        const topLimit = parseInt(chart2FilterMode) || 10;
+        filteredEntries = entries.slice(0, topLimit);
+    }
+
+    const labels2 = filteredEntries.map(e => e[0]);
+    const values2 = filteredEntries.map(e => Number(e[1] || 0));
+
+    const titleStr = rawChart2Title.toLowerCase();
+    const isRate = titleStr.includes('%') || titleStr.includes('rate') || titleStr.includes('pd');
+
+    if (typeof Chart !== 'undefined') {
+        const ctx2 = c2Canvas.getContext('2d');
+        if (chartCounterpartyInstance && typeof chartCounterpartyInstance.destroy === 'function') {
+            chartCounterpartyInstance.destroy();
+        }
+
+        chartCounterpartyInstance = new Chart(ctx2, {
+            type: 'bar',
+            data: {
+                labels: labels2,
+                datasets: [{
+                    label: isRate ? 'TTC PD Rate (%)' : 'Beban CKPN (Rp)',
+                    data: values2,
+                    backgroundColor: 'rgba(217, 119, 6, 0.85)',
+                    borderColor: '#b45309',
+                    borderWidth: 1,
+                    borderRadius: 6
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                layout: {
+                    padding: {
+                        bottom: labels2.length > 6 ? 20 : 0
+                    }
+                },
+                scales: {
+                    x: {
+                        ticks: {
+                            color: '#475569',
+                            font: { family: 'Inter', size: labels2.length > 10 ? 9 : 10, weight: '600' },
+                            maxRotation: labels2.length > 6 ? 45 : 0,
+                            minRotation: labels2.length > 6 ? 30 : 0,
+                            autoSkip: false,
+                            callback: function(val, index) {
+                                const label = this.getLabelForValue(val) || '';
+                                return label.length > 18 ? label.substring(0, 16) + '…' : label;
+                            }
+                        },
+                        grid: { display: false }
+                    },
+                    y: {
+                        ticks: {
+                            color: '#475569',
+                            font: { family: 'JetBrains Mono', size: 10 },
+                            callback: function (val) {
+                                if (isRate) return val.toFixed(1) + '%';
+                                if (val >= 1000000000) return (val / 1000000000).toFixed(1) + ' M';
+                                if (val >= 1000000) return (val / 1000000).toFixed(1) + ' Jt';
+                                if (val >= 1000) return (val / 1000).toFixed(0) + ' Rb';
+                                return val;
+                            }
+                        },
+                        grid: { color: 'rgba(0, 0, 0, 0.05)' }
+                    }
+                },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: 'rgba(15, 23, 42, 0.95)',
+                        titleColor: '#ffffff',
+                        titleFont: { family: 'Inter', size: 12, weight: 'bold' },
+                        bodyColor: '#fbbf24',
+                        bodyFont: { family: 'JetBrains Mono', size: 12 },
+                        padding: 10,
+                        cornerRadius: 8,
+                        callbacks: {
+                            label: function (ctx) {
+                                const val = Number(ctx.parsed.y || 0);
+                                if (isRate) {
+                                    const pctVal = val > 1.0 ? val : val * 100;
+                                    return ` TTC PD Rate: ${pctVal.toFixed(4)}%`;
+                                }
+                                return ' ' + ctx.dataset.label + ': ' + (val > 1000 ? formatRupiah(val) : val);
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    } else {
+        drawOfflineBar(c2Canvas, labels2, values2, rawChart2Title);
+    }
+}
+
+let lastChartsData = null;
+
+// Render Charts Dynamically
 function renderCharts(chartsData) {
-    // ----------------------------------------------------
-    // Chart 1: Portofolio / Rating Distribution
-    // ----------------------------------------------------
+    lastChartsData = chartsData;
     const c1Title = document.getElementById('chart1Title');
     const c1Tag = document.getElementById('chart1Tag');
     const c1Canvas = document.getElementById('chartInstruments');
     const c1Empty = document.getElementById('chart1Empty');
     const c1Legend = document.getElementById('chart1Legend');
-    c1Title.textContent = chartsData.chart1_title || "Distribusi Portofolio";
-    c1Tag.textContent = chartsData.chart1_tag || "Data Riil";
+    c1Title.textContent = chartsData.chart1_title || "Komposisi EAD per Jenis Instrumen";
+    c1Tag.textContent = chartsData.chart1_tag || "FASBIS • PUAS • Nostro";
 
     const c1Data = chartsData.chart1_data || {};
     const labels1 = Object.keys(c1Data);
@@ -375,7 +566,7 @@ function renderCharts(chartsData) {
         if (c1Empty) c1Empty.style.display = 'none';
 
         const chartColors = ['#059669', '#0284c7', '#d97706', '#7c3aed', '#e11d48', '#0d9488'];
-        renderChart1Legend(labels1, values1, chartColors);
+        renderChart1Legend(labels1, values1, chartColors, chartsData.chart1_title);
 
         if (typeof Chart !== 'undefined') {
             const ctx1 = c1Canvas.getContext('2d');
@@ -411,8 +602,7 @@ function renderCharts(chartsData) {
                                     const val = Number(ctx.parsed || 0);
                                     const total = ctx.dataset.data.reduce((a, b) => a + Number(b || 0), 0);
                                     const pct = total > 0 ? ((val / total) * 100).toFixed(1) : '0.0';
-                                    const valStr = val > 1000 ? formatRupiah(val) : val;
-                                    return ` EAD: ${valStr} (${pct}%)`;
+                                    return ` EAD: ${formatRupiah(val)} (${pct}%)`;
                                 }
                             }
                         }
@@ -421,93 +611,14 @@ function renderCharts(chartsData) {
                 }
             });
         } else {
-            // Fallback Offline: Gunakan Native Canvas Renderer
             drawOfflineDoughnut(c1Canvas, labels1, values1);
         }
     }
 
-    // ----------------------------------------------------
-    // Chart 2: Risiko / PD Rate Distribution
-    // ----------------------------------------------------
-    const c2Title = document.getElementById('chart2Title');
-    const c2Tag = document.getElementById('chart2Tag');
-    const c2Canvas = document.getElementById('chartCounterparty');
-    const c2Empty = document.getElementById('chart2Empty');
-    c2Title.textContent = chartsData.chart2_title || "Distribusi Risiko";
-    c2Tag.textContent = chartsData.chart2_tag || "Data Riil";
-
-    const c2Data = chartsData.chart2_data || {};
-    const labels2 = Object.keys(c2Data);
-    const values2 = Object.values(c2Data);
-    const hasData2 = labels2.length > 0;
-
-    if (!hasData2) {
-        c2Canvas.style.display = 'none';
-        if (c2Empty) c2Empty.style.display = 'flex';
-        if (chartCounterpartyInstance && typeof chartCounterpartyInstance.destroy === 'function') {
-            chartCounterpartyInstance.destroy();
-            chartCounterpartyInstance = null;
-        }
-    } else {
-        c2Canvas.style.display = 'block';
-        if (c2Empty) c2Empty.style.display = 'none';
-
-        if (typeof Chart !== 'undefined') {
-            const ctx2 = c2Canvas.getContext('2d');
-            if (chartCounterpartyInstance && typeof chartCounterpartyInstance.destroy === 'function') chartCounterpartyInstance.destroy();
-
-            chartCounterpartyInstance = new Chart(ctx2, {
-                type: 'bar',
-                data: {
-                    labels: labels2,
-                    datasets: [{
-                        label: 'Nilai Riil',
-                        data: values2,
-                        backgroundColor: 'rgba(217, 119, 6, 0.85)',
-                        borderColor: '#b45309',
-                        borderWidth: 1,
-                        borderRadius: 6
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        x: {
-                            ticks: { color: '#475569', font: { family: 'Inter', size: 11, weight: '600' } },
-                            grid: { display: false }
-                        },
-                        y: {
-                            ticks: {
-                                color: '#475569',
-                                font: { family: 'JetBrains Mono', size: 10 },
-                                callback: function (val) {
-                                    if (val >= 1000000) return (val / 1000000).toFixed(1) + ' Jt';
-                                    if (val >= 1000) return (val / 1000).toFixed(0) + ' Rb';
-                                    return val;
-                                }
-                            },
-                            grid: { color: 'rgba(0, 0, 0, 0.05)' }
-                        }
-                    },
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                            callbacks: {
-                                label: function (ctx) {
-                                    const val = ctx.parsed.y;
-                                    return ' ' + ctx.dataset.label + ': ' + (val > 1000 ? formatRupiah(val) : val);
-                                }
-                            }
-                        }
-                    }
-                }
-            });
-        } else {
-            // Fallback Offline: Gunakan Native Canvas Renderer
-            drawOfflineBar(c2Canvas, labels2, values2);
-        }
-    }
+    rawChart2Data = chartsData.chart2_data || {};
+    rawChart2Title = chartsData.chart2_title || "Distribusi Beban CKPN per Pihak Lawan";
+    rawChart2Tag = chartsData.chart2_tag || "Counterparty Risk";
+    applyChart2FilterAndRender();
 }
 
 // Render Pagination Bar Component
@@ -520,10 +631,8 @@ function renderPaginationBar(container, totalItems, pageSize, currentPage, total
     const showingText = `Menampilkan ${startIdx + 1}-${endIdx} dari ${totalItems} baris`;
 
     let buttonsHtml = '';
-    // Tombol Prev
     buttonsHtml += `<button type="button" class="btn-page" ${currentPage === 1 ? 'disabled' : ''} data-page="${currentPage - 1}">&laquo; Prev</button>`;
 
-    // Nomor Halaman
     for (let p = 1; p <= totalPages; p++) {
         if (totalPages > 7) {
             if (p !== 1 && p !== totalPages && Math.abs(p - currentPage) > 1) {
@@ -536,8 +645,7 @@ function renderPaginationBar(container, totalItems, pageSize, currentPage, total
         buttonsHtml += `<button type="button" class="btn-page ${p === currentPage ? 'active' : ''}" data-page="${p}">${p}</button>`;
     }
 
-    // Tombol Next
-    buttonsHtml += `<button type="button" class="btn-page" ${currentPage === totalPages ? 'disabled' : ''} data-page="${currentPage + 1}">Next &raquo;</button>`;
+    buttonsHtml += `<button type="button" class="btn-page ${currentPage === totalPages ? 'disabled' : ''} data-page="${currentPage + 1}">Next &raquo;</button>`;
 
     container.innerHTML = `
         <span class="pagination-info">${showingText}</span>
@@ -555,13 +663,22 @@ function renderPaginationBar(container, totalItems, pageSize, currentPage, total
 }
 
 // Render Table Headers and Body with Pagination (DDR 5, 10, 25, 50, 100)
+function formatDisplayDate(dateStr) {
+    if (!dateStr) return '-';
+    if (dateStr.includes('/')) return dateStr;
+    const parts = dateStr.split('-');
+    if (parts.length === 3) {
+        return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    }
+    return dateStr;
+}
+
 function renderTable(headers, records, cutOff) {
     const thead = document.getElementById('dealsTableHead');
     const tbody = document.getElementById('dealsTableBody');
     const counter = document.getElementById('recordCounter');
     const paginationEl = document.getElementById('dealsPagination');
 
-    // 1. Render Headers
     thead.innerHTML = '';
     const trHead = document.createElement('tr');
     headers.forEach(h => {
@@ -571,17 +688,24 @@ function renderTable(headers, records, cutOff) {
     });
     thead.appendChild(trHead);
 
-    // 2. Render Records Count
     tbody.innerHTML = '';
-    counter.textContent = `${records.length} Baris Data`;
+    if (counter) counter.textContent = `${records.length} Baris Data`;
 
     if (records.length === 0) {
+        const searchVal = document.getElementById('searchInput')?.value?.trim();
+        const filterVal = document.getElementById('filterInstrument')?.value?.trim();
+        const isFiltered = Boolean(searchVal || filterVal);
+
+        const emptyMessage = isFiltered
+            ? 'Tidak ada data transaksi yang cocok dengan filter yang dipilih.'
+            : `Belum ada data kalkulasi untuk tanggal ${formatDisplayDate(cutOff)}.`;
+
         tbody.innerHTML = `
             <tr>
-                <td colspan="${headers.length || 11}" class="text-center py-5" style="color: #64748b; font-size: 0.9rem;">
-                    <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">📭</div>
-                    <strong>Tidak ada data ditemukan pada database untuk modul ini (Cut-off: ${cutOff || '-'}).</strong><br>
-                    <span style="font-size: 0.8rem; color: #94a3b8;">Pastikan tabel staging / master pada database SQL Server telah terisi dan koneksi jaringan/VPN aktif.</span>
+                <td colspan="${headers.length || 11}" class="text-center py-5" style="color: #64748b; font-size: 0.95rem;">
+                    <div style="font-size: 1.8rem; margin-bottom: 0.5rem;">${isFiltered ? '🔍' : '📁'}</div>
+                    <strong>${emptyMessage}</strong>
+                    ${isFiltered ? '<br><span style="font-size: 0.8rem; color: #94a3b8;">Silakan ubah pilihan Instrumen atau kata kunci pencarian Anda.</span>' : ''}
                 </td>
             </tr>
         `;
@@ -589,7 +713,6 @@ function renderTable(headers, records, cutOff) {
         return;
     }
 
-    // 3. Hitung pagination
     const totalRecords = records.length;
     const totalPages = Math.ceil(totalRecords / dealsPageSize) || 1;
     if (dealsCurrentPage > totalPages) dealsCurrentPage = totalPages;
@@ -624,7 +747,6 @@ function renderTable(headers, records, cutOff) {
         tbody.appendChild(tr);
     });
 
-    // 4. Render Pagination Controls
     if (paginationEl) {
         renderPaginationBar(paginationEl, totalRecords, dealsPageSize, dealsCurrentPage, totalPages, startIdx, endIdx, (newPage) => {
             dealsCurrentPage = newPage;
@@ -639,20 +761,21 @@ function renderJournal(entries) {
     const paginationEl = document.getElementById('journalPagination');
     tbody.innerHTML = '';
 
-    if (!entries || entries.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" class="text-center py-3 text-muted">Belum ada ayat jurnal untuk modul ini.</td></tr>`;
+    const validEntries = (entries || []).filter(e => Number(e.nominal || 0) > 0);
+    if (validEntries.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" class="text-center py-4 text-muted">Belum ada ayat jurnal untuk modul ini.</td></tr>`;
         if (paginationEl) paginationEl.innerHTML = '';
         return;
     }
 
-    const totalEntries = entries.length;
+    const totalEntries = validEntries.length;
     const totalPages = Math.ceil(totalEntries / journalPageSize) || 1;
     if (journalCurrentPage > totalPages) journalCurrentPage = totalPages;
     if (journalCurrentPage < 1) journalCurrentPage = 1;
 
     const startIdx = (journalCurrentPage - 1) * journalPageSize;
     const endIdx = Math.min(startIdx + journalPageSize, totalEntries);
-    const pageEntries = entries.slice(startIdx, endIdx);
+    const pageEntries = validEntries.slice(startIdx, endIdx);
 
     pageEntries.forEach(entry => {
         const tr = document.createElement('tr');
@@ -691,31 +814,66 @@ function renderJournal(entries) {
     }
 }
 
-// Search Filter Handler
-document.getElementById('searchInput').addEventListener('input', function (e) {
-    const q = e.target.value.toLowerCase();
-    dealsCurrentPage = 1;
-    const filtered = currentRecords.filter(r => 
-        (r.col1 && String(r.col1).toLowerCase().includes(q)) ||
-        (r.col2 && String(r.col2).toLowerCase().includes(q)) ||
-        (r.col3 && String(r.col3).toLowerCase().includes(q))
-    );
-    renderTable(currentHeaders, filtered, document.getElementById('cutOffDate').value);
-});
+// Filter Deals by Search Query and Selected Instrument
+function getFilteredDealsRecords() {
+    const q = (document.getElementById('searchInput')?.value || '').toLowerCase().trim();
+    const instFilter = (document.getElementById('filterInstrument')?.value || '').trim();
 
-// DDR Page Size Selector Handlers (Poin 4: DDR 5, 10, 25, 50, 100)
+    return currentRecords.filter(r => {
+        const matchesQuery = !q || (
+            (r.col1 && String(r.col1).toLowerCase().includes(q)) ||
+            (r.col2 && String(r.col2).toLowerCase().includes(q)) ||
+            (r.col3 && String(r.col3).toLowerCase().includes(q))
+        );
+        const matchesInstrument = !instFilter || (
+            r.col3 && String(r.col3).trim() === instFilter
+        );
+        return matchesQuery && matchesInstrument;
+    });
+}
+
+// Populate Instrument Options Dynamically from Current Records
+function populateInstrumentFilter(records) {
+    const filterEl = document.getElementById('filterInstrument');
+    if (!filterEl) return;
+    const currentVal = filterEl.value;
+
+    const instruments = [...new Set(records.map(r => r.col3).filter(Boolean))].sort();
+
+    let html = '<option value="">Semua Instrumen</option>';
+    instruments.forEach(inst => {
+        const isSelected = (inst === currentVal) ? 'selected' : '';
+        html += `<option value="${inst}" ${isSelected}>${inst}</option>`;
+    });
+
+    filterEl.innerHTML = html;
+}
+
+// Search Filter Handler
+const searchInputEl = document.getElementById('searchInput');
+if (searchInputEl) {
+    searchInputEl.addEventListener('input', function () {
+        dealsCurrentPage = 1;
+        renderTable(currentHeaders, getFilteredDealsRecords(), document.getElementById('cutOffDate').value);
+    });
+}
+
+// Dropdown Instrument Filter Handler
+const filterInstrumentEl = document.getElementById('filterInstrument');
+if (filterInstrumentEl) {
+    filterInstrumentEl.addEventListener('change', function () {
+        dealsCurrentPage = 1;
+        renderTable(currentHeaders, getFilteredDealsRecords(), document.getElementById('cutOffDate').value);
+    });
+}
+
+// DDR Page Size Selector Handlers
 const pageSizeDealsEl = document.getElementById('pageSizeDeals');
 if (pageSizeDealsEl) {
     pageSizeDealsEl.addEventListener('change', (e) => {
         dealsPageSize = parseInt(e.target.value) || 10;
         dealsCurrentPage = 1;
-        const q = (document.getElementById('searchInput')?.value || '').toLowerCase();
-        const recordsToUse = q ? currentRecords.filter(r => 
-            (r.col1 && String(r.col1).toLowerCase().includes(q)) ||
-            (r.col2 && String(r.col2).toLowerCase().includes(q)) ||
-            (r.col3 && String(r.col3).toLowerCase().includes(q))
-        ) : currentRecords;
-        renderTable(currentHeaders, recordsToUse, document.getElementById('cutOffDate').value);
+        renderTable(currentHeaders, getFilteredDealsRecords(), document.getElementById('cutOffDate').value);
     });
 }
 
@@ -728,41 +886,118 @@ if (pageSizeJournalEl) {
     });
 }
 
-// Dropdown Change Handler: Otomatis membaca tanggal cut-off dari tabel database modul terkait & mengeksekusi query
-async function onModuleChange() {
-    const selectedModule = document.getElementById('moduleSelect').value;
-    const cutOffInput = document.getElementById('cutOffDate');
+// Chart 2 Top N Filter Handler
+const chart2TopFilterEl = document.getElementById('chart2TopFilter');
+if (chart2TopFilterEl) {
+    chart2TopFilterEl.addEventListener('change', (e) => {
+        chart2FilterMode = e.target.value;
+        applyChart2FilterAndRender();
+    });
+}
 
-    try {
-        // 1. Ambil tanggal cut-off terakhir dari tabel database fact/master modul terpilih
-        const res = await fetch(`/api/module-cutoff?module=${encodeURIComponent(selectedModule)}`);
-        if (res.ok) {
-            const data = await res.json();
-            if (data.latest_cutoff) {
-                cutOffInput.value = data.latest_cutoff;
-            }
+// =====================================================================
+// MODAL KONFIRMASI (MOCKUP KONFIRMASI SEBELUM RUN ENGINE)
+// =====================================================================
+function openConfirmModal() {
+    const cutOff = document.getElementById('cutOffDate')?.value || '-';
+    const displayEl = document.getElementById('modalCutOffDisplay');
+    if (displayEl) {
+        if (cutOff.includes('-')) {
+            const parts = cutOff.split('-');
+            displayEl.textContent = `${parts[2]}/${parts[1]}/${parts[0]}`;
+        } else {
+            displayEl.textContent = cutOff;
         }
-    } catch (e) {
-        console.warn('Gagal membaca tanggal cut-off modul dari database:', e);
     }
+    const modal = document.getElementById('confirmModal');
+    if (modal) modal.classList.add('active');
+}
 
-    // 2. Jalankan eksekusi kalkulasi sesuai modul dan tanggal cut-off baru
-    await runEngine();
+function closeConfirmModal() {
+    const modal = document.getElementById('confirmModal');
+    if (modal) modal.classList.remove('active');
 }
 
 // Event Listeners:
-// a. Saat dropdown modul berganti -> otomatis update tanggal cut-off dari tabel modul & jalankan query
-document.getElementById('moduleSelect').addEventListener('change', onModuleChange);
+const btnRunEngineEl = document.getElementById('btnRunEngine');
+if (btnRunEngineEl) {
+    btnRunEngineEl.addEventListener('click', openConfirmModal);
+}
 
-// b. Saat tanggal cut-off diubah manual oleh user -> jalankan ulang kalkulasi
-document.getElementById('cutOffDate').addEventListener('change', runEngine);
+const btnCancelModalEl = document.getElementById('btnCancelModal');
+if (btnCancelModalEl) {
+    btnCancelModalEl.addEventListener('click', closeConfirmModal);
+}
 
-// c. Tombol "Jalankan Kalkulasi"
-document.getElementById('btnRunEngine').addEventListener('click', runEngine);
+const btnConfirmRunEl = document.getElementById('btnConfirmRun');
+if (btnConfirmRunEl) {
+    btnConfirmRunEl.addEventListener('click', () => {
+        closeConfirmModal();
+        runEngine();
+    });
+}
 
-// Initialization: Default langsung ke modul 3 (Penempatan Antar Bank & Nostro Devisa)
+// Tutup modal jika klik di area overlay gelap
+const confirmModalEl = document.getElementById('confirmModal');
+if (confirmModalEl) {
+    confirmModalEl.addEventListener('click', (e) => {
+        if (e.target === confirmModalEl) {
+            closeConfirmModal();
+        }
+    });
+}
+
+// Tutup modal jika menekan tombol Escape
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        closeConfirmModal();
+    }
+});
+
+
+// Auto-load data saat user mengganti tanggal cut-off di date picker
+const cutOffDateInputEl = document.getElementById('cutOffDate');
+if (cutOffDateInputEl) {
+    cutOffDateInputEl.addEventListener('change', async (e) => {
+        const newCutoff = e.target.value;
+        if (!newCutoff) return;
+        const searchEl = document.getElementById('searchInput');
+        if (searchEl) searchEl.value = '';
+        const filterInstEl = document.getElementById('filterInstrument');
+        if (filterInstEl) filterInstEl.value = '';
+
+        dealsCurrentPage = 1;
+        await fetchAndRenderData(newCutoff);
+    });
+}
+
+// Initialization:
 document.addEventListener('DOMContentLoaded', async () => {
-    document.getElementById('moduleSelect').value = "interbank";
     checkSystemStatus();
-    await onModuleChange();
+    let initialCutoff = '2026-10-31';
+    try {
+        const res = await fetch('/api/module-cutoff?module=interbank');
+        if (res.ok) {
+            const data = await res.json();
+            if (data.latest_cutoff) {
+                initialCutoff = data.latest_cutoff;
+                document.getElementById('cutOffDate').value = initialCutoff;
+            }
+        }
+    } catch (e) {
+        console.warn('Gagal membaca cut-off interbank:', e);
+    }
+    const currentCutoff = document.getElementById('cutOffDate').value || initialCutoff;
+    await fetchAndRenderData(currentCutoff);
+});
+
+// Window Resize Responsive Redraw for Full Width:
+let resizeTimer;
+window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+        if (lastChartsData) {
+            renderCharts(lastChartsData);
+        }
+    }, 150);
 });
