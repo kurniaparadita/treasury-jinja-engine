@@ -183,7 +183,7 @@ window.triggerHarmonize = async function() {
     const btnText = document.getElementById('btnText');
     const cutOff = document.getElementById('cutOffDate')?.value || "2026-10-31";
 
-    if (!confirm(`Jalankan penarikan data Antasena & harmonisasi rating EOM (Cut-off: ${cutOff})?\n\nProses ini akan mengonsolidasikan data dan menyegarkan tabel dim_counterparty_harmonized.`)) {
+    if (!confirm(`Jalankan penarikan data Antasena & harmonisasi rating EOM (Cut-off: ${cutOff})?\n\nProses ini akan mengonsolidasikan data dan menyegarkan master counterparty.`)) {
         return;
     }
 

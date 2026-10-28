@@ -197,7 +197,7 @@ def fetch_counterparty_real(cut_off: str) -> dict:
         "summary": {
             "kpi1_title": "Total Counterparty",
             "kpi1_val": f"{total_inst} Entitas",
-            "kpi1_sub": "Tabel dim_counterparty_harmonized",
+            "kpi1_sub": "Master Pihak Lawan Terharmonisasi",
             "kpi2_title": "Sovereign (0.01% PD)",
             "kpi2_val": f"{sovereign_count} Entitas",
             "kpi2_sub": "Pemerintah Pusat & Bank Indonesia",
@@ -211,8 +211,8 @@ def fetch_counterparty_real(cut_off: str) -> dict:
             "kpi4_sub": f"Rata-rata PD: {avg_pd * 100:.4f}%"
         },
         "table": {
-            "title": "Golden Record Master Counterparty (dim_counterparty_harmonized)",
-            "subtitle": "Data resmi tabel dim_counterparty_harmonized hasil konsolidasi & resolusi multi-rating",
+            "title": "Golden Record Master Counterparty",
+            "subtitle": "Data resmi hasil konsolidasi & resolusi multi-rating (PSAK 413)",
             "headers": ["Sandi Pihak Lawan", "Nama Institusi", "Golongan Antasena", "Lembaga Final", "Rating Final", "Kategori Investasi", "Base TTC PD"],
             "records": records
         },
